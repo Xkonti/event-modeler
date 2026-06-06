@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.17.2/.schema/devbox.schema.json",
+  "packages": [
+    "bun@latest",
+    "nodejs@22"
+  ],
+  "shell": {
+    "init_hook": [
+      "echo '🧰 Event Modeler'",
+      "echo '   devbox run setup      install deps + create backend/.env   (run once)'",
+      "echo '   devbox services up    DB (docker) + backend :3000 + frontend :5173, with TUI'",
+      "echo '                         restart <name> / logs / health; add -b to background'",
+      "echo '   devbox run db:reset   WIPE the DB volume + fresh Postgres   (stop services first)'",
+      "echo '   devbox run migrate    (re)create constraint tables          (DB must be up)'"
+    ],
+    "scripts": {
+      "setup": [
+        "test -f backend/.env || cp backend/.env.example backend/.env",
+        "(cd backend && bun install)",
+        "(cd frontend && bun install)",
+        "echo '✅ deps installed, backend/.env ready. Start with: devbox services up'"
+      ],
+      "install": [
+        "(cd backend && bun install)",
+        "(cd frontend && bun install)"
+      ],
+      "migrate": [
+        "cd backend && bun run migrate"
+      ],
+      "db:reset": [
+        "docker compose --env-file backend/.env -p event-modeler -f backend/docker-compose.yml down -v",
+        "docker compose --env-file backend/.env -p event-modeler -f backend/docker-compose.yml up -d --wait",
+        "echo '🧨 DB volume wiped — fresh Postgres on :5432. Backend re-migrates on start (or: devbox run migrate).'"
+      ]
+    }
+  }
+}

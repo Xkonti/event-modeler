@@ -1,10 +1,20 @@
 /**
  * Runtime configuration, sourced from the environment.
- * Defaults match docker-compose.yml + .env.example for local dev.
+ *
+ * The Postgres URL is BUILT from the POSTGRES_* parts in .env.example (the
+ * single source of truth shared with the dev container). POSTGRESQL_CONNECTION_STRING
+ * overrides it wholesale for prod/CI. Per-part fallbacks keep unit tests and
+ * bare `bun` runs (no .env loaded) working.
  */
+const pgUser = process.env.POSTGRES_USER ?? 'event_modeler';
+const pgPassword = process.env.POSTGRES_PASSWORD ?? 'event_modeler';
+const pgHost = process.env.POSTGRES_HOST ?? 'localhost';
+const pgPort = process.env.POSTGRES_PORT ?? '5432';
+const pgDb = process.env.POSTGRES_DB ?? 'event_modeler';
+
 export const connectionString =
   process.env.POSTGRESQL_CONNECTION_STRING ??
-  'postgresql://event_modeler:event_modeler@localhost:5432/event_modeler';
+  `postgresql://${pgUser}:${pgPassword}@${pgHost}:${pgPort}/${pgDb}`;
 
 export const port = Number(process.env.PORT ?? 3000);
 

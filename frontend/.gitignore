@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 *.local
+bun.lock
 test-results/
 playwright-report/
 playwright/.cache/
