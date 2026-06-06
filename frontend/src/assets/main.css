@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 — design tokens live in CSS via @theme (no tailwind.config.js,
+ * no postcss.config.js). Tokens here become utilities/vars: e.g. --color-brand
+ * → bg-brand / text-brand and var(--color-brand).
+ */
+@theme {
+  --color-brand: oklch(0.62 0.19 255);
+  --color-brand-fg: oklch(0.98 0 0);
+}
