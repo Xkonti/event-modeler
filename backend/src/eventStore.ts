@@ -2,6 +2,8 @@ import { projections } from '@event-driven-io/emmett';
 import { getPostgreSQLEventStore } from '@event-driven-io/emmett-postgresql';
 import { connectionString } from './config.ts';
 import { entityNamesConstraint } from './constraints/entityNames.ts';
+import { authUserEmailIndex } from './constraints/authUserEmailIndex.ts';
+import { authAccountIndex } from './constraints/authAccountIndex.ts';
 
 /**
  * Builds an event store for a given connection string. Tests inject a
@@ -15,7 +17,11 @@ import { entityNamesConstraint } from './constraints/entityNames.ts';
 export const createEventStore = (connectionStr: string) =>
   getPostgreSQLEventStore(connectionStr, {
     schema: { autoMigration: 'CreateOrUpdate' },
-    projections: projections.inline([entityNamesConstraint]),
+    projections: projections.inline([
+      entityNamesConstraint,
+      authUserEmailIndex,
+      authAccountIndex,
+    ]),
   });
 
 /** The app-wide event store (lazily connects on first use). */

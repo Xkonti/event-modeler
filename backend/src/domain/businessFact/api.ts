@@ -5,16 +5,25 @@ import { documents } from '../../db.ts';
 import type { CatalogEntry } from '../../read/entityCatalog.ts';
 import { decide, type BusinessFactCommand } from './businessFact.ts';
 import { handleBusinessFact } from './commandHandler.ts';
+import type { Auth } from '../../auth/auth.ts';
+import { requireAuth } from '../../auth/requireAuth.ts';
 
 /**
  * HTTP surface for the business-fact entity. Writes go through the decider +
  * command handler (per-entity stream); a duplicate name surfaces as a 409 when
  * the inline `entity_names` constraint rolls the append back. The read endpoint
  * queries the async catalog read model.
+ *
+ * WRITE routes (POST/PUT/DELETE) are guarded by `requireAuth(auth)` — no valid
+ * session ⇒ 401 before any decider runs (notes/auth-build-plan.md §4 stage B3,
+ * §7). The GET read endpoint stays OPEN in v1. `buildAuthApp` mounts this router
+ * under `/api`, so the live paths are `/api/business-facts*`.
  */
 export const businessFactApi =
-  (eventStore: AppEventStore): WebApiSetup =>
+  (eventStore: AppEventStore, auth: Auth): WebApiSetup =>
   (router: Router) => {
+    const guard = requireAuth(auth);
+
     const run = async (
       res: Response,
       id: string,
@@ -33,15 +42,18 @@ export const businessFactApi =
         // an optimistic-concurrency conflict both land here. The skeleton maps
         // both to 409; distinguishing them cleanly (inspect PG error 23505 vs
         // version conflict) is a TODO — see README.
+        //
+        // Log the raw error server-side; the client body stays generic so PG
+        // error text (table/column names) never reaches the wire.
+        console.error('[businessFact] write conflict:', error);
         res.status(409).json({
           ok: false,
           error: 'conflict: name already in use or concurrent modification',
-          detail: String(error),
         });
       }
     };
 
-    router.post('/business-facts', (req: Request, res: Response) => {
+    router.post('/business-facts', guard, (req: Request, res: Response) => {
       const { factId, name, context } = req.body;
       void run(res, factId, {
         type: 'DefineBusinessFact',
@@ -49,23 +61,31 @@ export const businessFactApi =
       });
     });
 
-    router.put('/business-facts/:id/name', (req: Request, res: Response) => {
-      const factId = req.params.id;
-      if (!factId) return void res.status(400).json({ error: 'missing id' });
-      void run(res, factId, {
-        type: 'RenameBusinessFact',
-        data: { factId, name: req.body.name },
-      });
-    });
+    router.put(
+      '/business-facts/:id/name',
+      guard,
+      (req: Request, res: Response) => {
+        const factId = req.params.id;
+        if (!factId) return void res.status(400).json({ error: 'missing id' });
+        void run(res, factId, {
+          type: 'RenameBusinessFact',
+          data: { factId, name: req.body.name },
+        });
+      },
+    );
 
-    router.delete('/business-facts/:id', (req: Request, res: Response) => {
-      const factId = req.params.id;
-      if (!factId) return void res.status(400).json({ error: 'missing id' });
-      void run(res, factId, {
-        type: 'ArchiveBusinessFact',
-        data: { factId },
-      });
-    });
+    router.delete(
+      '/business-facts/:id',
+      guard,
+      (req: Request, res: Response) => {
+        const factId = req.params.id;
+        if (!factId) return void res.status(400).json({ error: 'missing id' });
+        void run(res, factId, {
+          type: 'ArchiveBusinessFact',
+          data: { factId },
+        });
+      },
+    );
 
     router.get(
       '/business-facts/:id',

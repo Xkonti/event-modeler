@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test src",
     "test:integration": "node --test 'test/integration/*.test.ts'",
+    "test:integration:auth": "node --test 'test/integration/auth-*.test.ts'",
     "test:all": "bun run test && bun run test:integration",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down"
@@ -21,6 +22,7 @@
     "@event-driven-io/emmett-expressjs": "latest",
     "@event-driven-io/emmett-postgresql": "latest",
     "@event-driven-io/pongo": "latest",
+    "better-auth": "^1.6.14",
     "express": "^4.21.2",
     "pg": "^8.21.0"
   },

@@ -13,9 +13,21 @@ export type EntityType =
   | 'wireframe'
   | 'automation'
   | 'slice'
-  | 'relation';
+  | 'relation'
+  | 'user'
+  | 'account';
 
 export const streamId = (type: EntityType, id: string): string => `${type}-${id}`;
 
 export const businessFactStreamId = (id: string): string =>
   streamId('businessFact', id);
+
+/** One stream per auth user: `user-{userId}` (userId = better-auth's generated id). */
+export const userStreamId = (id: string): string => streamId('user', id);
+
+/**
+ * One stream per auth account row: `account-{accountId}` where accountId =
+ * better-auth's `account.id` (its row PK), NOT the provider-side `accountId`.
+ * Keyed on the PK so every `where:[{field:'id'}]` is a direct stream lookup.
+ */
+export const accountStreamId = (id: string): string => streamId('account', id);
