@@ -8,7 +8,7 @@ import type { Cipher } from '../../auth/crypto.ts';
  * Secrets (`providerAccountId`, `password` hash, OAuth token bundle) live ONLY
  * in `*Cipher` blobs, encrypted with the OWNING USER's DEK (keyed by userId) —
  * one DEK per user shreds the user AND all their accounts in a single row delete
- * (notes/auth-architecture.md §1.3, §8 #11).
+ * (notes/auth-architecture.md).
  *
  * Plaintext (not PII, must be filterable without a DEK):
  *  - `userId` — the FK better-auth queries accounts by.

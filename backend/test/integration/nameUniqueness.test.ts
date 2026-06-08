@@ -22,12 +22,12 @@ let eventStore: AppEventStore;
 
 const define = (id: string, name: string, context = 'Budgeting') =>
   handleBusinessFact(eventStore, id, (state) =>
-    decide({ type: 'DefineBusinessFact', data: { factId: id, name, context } }, state),
+    decide({ type: 'DefineBusinessFact', data: { entityId: id, name, context } }, state),
   );
 
 const archive = (id: string) =>
   handleBusinessFact(eventStore, id, (state) =>
-    decide({ type: 'ArchiveBusinessFact', data: { factId: id } }, state),
+    decide({ type: 'ArchiveBusinessFact', data: { entityId: id } }, state),
   );
 
 describe('global name uniqueness (inline constraint)', () => {

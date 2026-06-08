@@ -5,7 +5,7 @@ import type { AccountEvent } from '../domain/account/events.ts';
 /**
  * CONSTRAINT projection — account lookup index AND `(providerId,
  * providerAccountId)` uniqueness. Registered INLINE → runs in the append tx
- * (notes/auth-architecture.md §2.5).
+ * (notes/auth-architecture.md).
  *
  * Serves better-auth's two account query shapes: findOne by
  * (providerId + providerAccountId) on sign-in, and findMany by userId. Holds

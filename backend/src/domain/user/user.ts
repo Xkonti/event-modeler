@@ -11,7 +11,7 @@ import type { UserEvent } from './events.ts';
  *
  * Cross-aggregate email uniqueness is NOT decided here (a decider sees one
  * stream) — the inline `auth_user_email_index` constraint enforces it in the
- * append tx (notes/auth-architecture.md §2.4).
+ * append tx (notes/auth-architecture.md).
  */
 
 // --- State ---------------------------------------------------------------

@@ -1,0 +1,70 @@
+# Devbox services — `devbox services up` (Devbox bundles process-compose).
+#
+#   devbox services up                 start all (TUI: per-process logs, health, F-key restart)
+#   devbox services up -b              start in the background
+#   devbox services attach             re-open the TUI of a backgrounded run
+#   devbox services ls                 list status
+#   devbox services restart backend    restart one process (db keeps running)
+#   devbox services stop               stop all (DB container is stopped, volume kept)
+#
+# DB = dockerised Postgres (compose project pinned to `event-modeler`); backend +
+# frontend run locally on Bun. Wipe the DB volume with `devbox run db:reset`.
+version: "0.5"
+
+processes:
+  db:
+    description: "Postgres — docker compose"
+    # --env-file feeds POSTGRES_* (single source of truth: backend/.env) into
+    # compose interpolation. -p/-f make this cwd-independent and identical to
+    # `devbox run db:reset` and backend's `db:up` → everything shares ONE
+    # container + volume under the same compose project.
+    command: "docker compose --env-file backend/.env -p event-modeler -f backend/docker-compose.yml up"
+    # stop (not down -v) on shutdown → the data volume survives a services stop.
+    shutdown:
+      command: "docker compose --env-file backend/.env -p event-modeler -f backend/docker-compose.yml stop"
+      timeout_seconds: 30
+    # pg_isready as $POSTGRES_USER (set INSIDE the container) → avoids the default
+    # `root` role, which Postgres logs as FATAL every probe cycle.
+    readiness_probe:
+      exec:
+        command: "docker compose --env-file backend/.env -p event-modeler -f backend/docker-compose.yml exec -T postgres sh -c 'pg_isready -U \"$POSTGRES_USER\" -q'"
+      initial_delay_seconds: 2
+      period_seconds: 3
+      timeout_seconds: 5
+      failure_threshold: 30
+    availability:
+      restart: "no"
+
+  backend:
+    description: "API — Bun, :3000"
+    working_dir: backend
+    command: "bun run dev"
+    depends_on:
+      db:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        port: 3000
+        path: /api/health
+      initial_delay_seconds: 2
+      period_seconds: 3
+      timeout_seconds: 5
+      failure_threshold: 30
+    availability:
+      restart: "on_failure"
+      backoff_seconds: 2
+      max_restarts: 10
+
+  frontend:
+    description: "Vite — Bun, :5173"
+    working_dir: frontend
+    command: "bun run dev"
+    depends_on:
+      backend:
+        condition: process_healthy
+    availability:
+      restart: "on_failure"
+      backoff_seconds: 2
+      max_restarts: 10

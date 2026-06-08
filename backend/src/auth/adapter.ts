@@ -39,12 +39,12 @@ import type { AdapterWhere } from './sqlWhere.ts';
 
 /**
  * The better-auth ↔ event-sourced + crypto-shred adapter
- * (notes/auth-architecture.md §3). `user`/`account` are event-sourced with
+ * (notes/auth-architecture.md). `user`/`account` are event-sourced with
  * crypto-shredding; `session`/`verification` are plain Postgres tables.
  *
  * Every place better-auth's mutable-CRUD model fights our append-only ES store
  * is handled here: update→command, delete(user)→THE SHRED, findOne(email)→blind
- * index, etc. (§8). We translate ONLY the simple `eq`/`in` id/email/userId/
+ * index, etc. We translate ONLY the simple `eq`/`in` id/email/userId/
  * providerId where-shapes better-auth actually issues and throw on anything else
  * — a silent miss would be an auth bug.
  *

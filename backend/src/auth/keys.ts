@@ -8,7 +8,7 @@
  * - BETTER_AUTH_SECRET: better-auth's own signing/cookie secret (>= 32 chars).
  *
  * `node:crypto` / pure env only → Node-safe (testcontainers integration runs on
- * Node, see notes/auth-build-plan.md §6 gotcha #3).
+ * Node).
  */
 
 /** Decode a base64 env var into a Buffer of EXACTLY 32 bytes, or throw. */

@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'bun:test';
 import type { ReadEvent } from '@event-driven-io/emmett';
-import type { BusinessFactEvent } from '../domain/businessFact/events.ts';
-import { evolveCatalog, type CatalogEntry } from './entityCatalog.ts';
+import {
+  evolveCatalog,
+  type CatalogEntry,
+  type CatalogEvent,
+} from './entityCatalog.ts';
 
 /**
  * Unit tests for the catalog read-model fold — a pure function, no database.
  * Metadata is irrelevant to the fold, so we cast minimal event shapes.
  */
-const ev = (e: BusinessFactEvent): ReadEvent<BusinessFactEvent> =>
-  e as ReadEvent<BusinessFactEvent>;
+const ev = (e: CatalogEvent): ReadEvent<CatalogEvent> =>
+  e as ReadEvent<CatalogEvent>;
 
 describe('evolveCatalog', () => {
   it('creates a document on Defined', () => {
@@ -16,7 +19,7 @@ describe('evolveCatalog', () => {
       null,
       ev({
         type: 'BusinessFactDefined',
-        data: { factId: 'f1', name: 'BudgetYearDefined', context: 'Budgeting' },
+        data: { entityId: 'f1', name: 'BudgetYearDefined', context: 'Budgeting' },
       }),
     );
     expect(doc).toEqual({
@@ -38,7 +41,7 @@ describe('evolveCatalog', () => {
     };
     const doc = evolveCatalog(
       existing,
-      ev({ type: 'BusinessFactRenamed', data: { factId: 'f1', name: 'New' } }),
+      ev({ type: 'BusinessFactRenamed', data: { entityId: 'f1', name: 'New' } }),
     );
     expect(doc?.name).toBe('New');
   });
@@ -53,8 +56,29 @@ describe('evolveCatalog', () => {
     };
     const doc = evolveCatalog(
       existing,
-      ev({ type: 'BusinessFactArchived', data: { factId: 'f1' } }),
+      ev({ type: 'BusinessFactArchived', data: { entityId: 'f1' } }),
     );
     expect(doc?.archived).toBe(true);
+  });
+
+  it('catalogs a slice with its type on SliceDefined', () => {
+    const doc = evolveCatalog(
+      null,
+      ev({ type: 'SliceDefined', data: { entityId: 's1', name: 'Checkout' } }),
+    );
+    expect(doc).toEqual({
+      _id: 's1',
+      entityType: 'slice',
+      name: 'Checkout',
+      archived: false,
+    });
+  });
+
+  it('uses an empty name for an unnamed slice', () => {
+    const doc = evolveCatalog(
+      null,
+      ev({ type: 'SliceDefined', data: { entityId: 's2' } }),
+    );
+    expect(doc?.name).toBe('');
   });
 });

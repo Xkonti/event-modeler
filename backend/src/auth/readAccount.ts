@@ -89,7 +89,7 @@ const toDate = (v?: string | null): Date | null => (v ? new Date(v) : null);
  * Reconstruct a decrypted account by id, or `null` if it does not exist, was
  * erased, or its owner's DEK is gone (shredded). The account is encrypted with
  * the OWNING user's DEK — loaded via `auth_user_keys` by the `userId` folded off
- * the stream (notes/auth-architecture.md §1.3, §3.4).
+ * the stream (notes/auth-architecture.md).
  */
 export const readAccount = async (
   eventStore: AppEventStore,

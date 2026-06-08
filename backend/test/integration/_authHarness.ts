@@ -2,8 +2,8 @@
  * Shared integration harness for the auth API E2E suites (A1–A5 / B6–B9 /
  * C10–C14). Underscore-prefixed so the `*.test.ts` glob skips it.
  *
- * Runs under `node --test` (testcontainers' lifecycle probe hangs under Bun —
- * notes/auth-build-plan.md §6 gotcha #3). Every src module it touches is loaded
+ * Runs under `node --test` (testcontainers' lifecycle probe hangs under Bun).
+ * Every src module it touches is loaded
  * via dynamic `import()` AFTER the test env is set, because the singletons bind
  * the connection string + crypto keys at module-load:
  *   - config.ts        reads POSTGRESQL_CONNECTION_STRING / BETTER_AUTH_URL.

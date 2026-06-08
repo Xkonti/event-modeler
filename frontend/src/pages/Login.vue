@@ -6,6 +6,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login } from '@/repositories/authRepository'
+import { useSessionStore } from '@/stores/session'
 import FormField from '@/components/ui/FormField.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
@@ -17,6 +18,7 @@ const busy = ref(false)
 
 const router = useRouter()
 const route = useRoute()
+const sessionStore = useSessionStore()
 
 async function submit() {
   error.value = ''
@@ -36,6 +38,8 @@ async function submit() {
     !redirect.startsWith('//')
       ? redirect
       : '/'
+  // Refresh the reactive session (cookie is now set) so the guard sees authed.
+  await sessionStore.refresh()
   router.replace(dest)
 }
 </script>

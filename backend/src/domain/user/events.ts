@@ -5,7 +5,7 @@ import type { Cipher } from '../../auth/crypto.ts';
  * Auth user events. One stream per user: `user-{userId}`.
  *
  * PII (`email`, `name`, `image`) lives ONLY in the `*Cipher` ciphertext blobs —
- * encrypted with that user's DEK (notes/auth-architecture.md §1.3). NOTHING in
+ * encrypted with that user's DEK (notes/auth-architecture.md). NOTHING in
  * an event reconstructs PII without the DEK row in `auth_user_keys`; deleting
  * that row is the crypto-shred.
  *

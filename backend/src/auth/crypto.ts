@@ -1,5 +1,5 @@
 /**
- * Crypto-shredding primitives (LOCKED API — notes/auth-build-plan.md §1.2).
+ * Crypto-shredding primitives (notes/auth-architecture.md: crypto-shredding pattern).
  *
  * AES-256-GCM with a RANDOM 12-byte IV per operation (never reused). Cipher blob
  * is `{ iv, authTag, ct }`, all base64 — field name is `ct` (NOT `ciphertext`);
@@ -8,7 +8,7 @@
  * Pure functions, no DB. `node:crypto` ONLY → Node-safe (testcontainers
  * integration runs on Node; Bun-only globals would break it).
  *
- * Key hierarchy (notes/auth-architecture.md §2.1):
+ * Key hierarchy (notes/auth-architecture.md):
  *   KEK (env)  ── wraps ──▶ DEK (per user, random 32B, stored wrapped)
  *                              └─ encrypts ─▶ user PII + that user's account secrets
  *   EMAIL_INDEX_KEY (env) ── HMAC-SHA256 ──▶ deterministic email blind index

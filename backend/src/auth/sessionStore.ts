@@ -4,7 +4,7 @@ import { assertConstrained, buildWhere, type AdapterWhere } from './sqlWhere.ts'
 
 /**
  * Plain `pg` CRUD for the ephemeral `auth_session` table (no PII → no crypto,
- * notes/auth-architecture.md §3.5). Maps better-auth camelCase ↔ snake_case
+ * notes/auth-architecture.md). Maps better-auth camelCase ↔ snake_case
  * columns and translates the adapter `where` shapes to parameterized SQL.
  *
  * Node-safe (`pg`, no Bun globals) — integration runs under Node.

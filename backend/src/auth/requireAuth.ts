@@ -26,7 +26,7 @@ declare global {
 }
 
 /**
- * Auth guard for WRITE routes (notes/auth-build-plan.md §4 stage B3, §1.3).
+ * Auth guard for WRITE routes (notes/auth-architecture.md).
  *
  * Resolves the better-auth session from the request cookies. better-auth wants a
  * WHATWG `Headers`; `fromNodeHeaders` converts Node's `IncomingHttpHeaders`. No
@@ -34,7 +34,7 @@ declare global {
  * the chain stops. Otherwise `req.user`/`req.session` are populated and the
  * request proceeds.
  *
- * v1 guards writes only; GET stays open (§7). Bound to the `auth` instance at
+ * v1 guards writes only; GET stays open. Bound to the `auth` instance at
  * route-setup time so `buildAuthApp` can thread the same instance everywhere.
  */
 export const requireAuth =

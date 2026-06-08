@@ -18,5 +18,11 @@ export const useSessionStore = defineStore('session', () => {
   const isAuthenticated = computed(() => !!session.value.data?.user)
   const isReady = computed(() => !session.value.isPending)
 
-  return { raw: session, user, isAuthenticated, isReady }
+  // Force a refetch of GET /api/auth/get-session so the reactive session reflects
+  // a just-set cookie (after signup/login) BEFORE a guard reads it — otherwise the
+  // guard sees stale unauthenticated state and bounces a freshly-authed user to
+  // /login. better-auth's useSession exposes refetch on its reactive value.
+  const refresh = () => session.value.refetch?.()
+
+  return { raw: session, user, isAuthenticated, isReady, refresh }
 })

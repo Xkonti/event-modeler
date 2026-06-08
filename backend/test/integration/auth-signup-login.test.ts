@@ -1,7 +1,7 @@
 /**
  * A1–A5 — signup + login lifecycle over real HTTP against a real Postgres.
  * No mocking of better-auth / the adapter / crypto; the only fake is the
- * throwaway testcontainers DB (notes/auth-test-plan.md §1.2 A).
+ * throwaway testcontainers DB.
  *
  * The crux is A1's "no plaintext PII at rest": every `user-*` / `account-*`
  * event row in `emt_messages.message_data` must be FREE of the raw email / name

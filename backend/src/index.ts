@@ -19,7 +19,7 @@ import { buildAuthApp } from './http/app.ts';
  * with the integration harness; it owns the auth-raw-before-json ordering and
  * mounts domain routers under `/api`. `startAPI` here just `http.createServer`s
  * the plain Express app and listens (confirmed: it accepts any Express
- * Application — notes/auth-build-plan.md §4 stage B3).
+ * Application).
  */
 const main = async (): Promise<void> => {
   await eventStore.schema.migrate();

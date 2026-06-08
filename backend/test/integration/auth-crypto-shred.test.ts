@@ -1,9 +1,9 @@
 /**
  * C10–C14 — crypto-shredding on erasure (THE HEADLINE).
- * notes/auth-test-plan.md §1.2 C; notes/auth-build-plan.md §4 (test table).
+ * See notes/auth-architecture.md (crypto-shredding pattern).
  *
  * The shred is run via the REAL adapter `delete({model:'user'})` path — the v1
- * erasure entrypoint (no public "delete me" route; §1.3 of the build plan). It
+ * erasure entrypoint (no public "delete me" route in v1). It
  * deletes the per-user DEK row FIRST (the irreversible step), then appends the
  * erasure events + frees the indexes + drops sessions.
  *

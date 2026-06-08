@@ -4,7 +4,7 @@ import { assertConstrained, buildWhere, type AdapterWhere } from './sqlWhere.ts'
 
 /**
  * Plain `pg` CRUD for the ephemeral `auth_verification` table (one-shot tokens;
- * inert in v1 — email-verify disabled, password-reset deferred, §2.7). No
+ * inert in v1 — email-verify disabled, password-reset deferred). No
  * durable PII → no crypto. Same camel↔snake + where-translation pattern as
  * sessionStore.
  */

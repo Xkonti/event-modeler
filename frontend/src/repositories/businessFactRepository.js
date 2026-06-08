@@ -41,7 +41,7 @@ export function useBusinessFact(getId) {
 export function useDefineBusinessFact() {
   const cache = useQueryCache()
   return useMutation({
-    /** @param {{ factId: string, name: string, context: string }} payload */
+    /** @param {{ entityId: string, name: string, context: string }} payload */
     mutation: (payload) => http.post('/api/business-facts', payload),
     async onSettled() {
       await cache.invalidateQueries({ key: FACT_KEYS.root })

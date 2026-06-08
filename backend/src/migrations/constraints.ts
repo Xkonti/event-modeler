@@ -11,7 +11,7 @@ import { connectionString as defaultConnectionString } from '../config.ts';
  *                    entity_id). Same pattern as names — see
  *                    notes/sessions-and-collaboration.md.
  *
- * Auth tables (notes/auth-architecture.md §2.3–2.7):
+ * Auth tables (notes/auth-architecture.md):
  *  - auth_user_keys        : deletable per-user DEK store — the crypto-shred lever.
  *  - auth_user_email_index : email blind-index + uniqueness (inline constraint).
  *  - auth_account_index    : account lookup + (provider_id, provider_account_id)

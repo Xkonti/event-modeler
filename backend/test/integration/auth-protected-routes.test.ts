@@ -2,7 +2,7 @@
  * B6–B9 — route protection. The businessFact WRITE routes are guarded by
  * `requireAuth(auth)` (mounted under `/api` by `buildAuthApp`), so the live path
  * is `POST /api/business-facts`. GET stays open in v1
- * (notes/auth-test-plan.md §1.2 B; notes/auth-build-plan.md §4 stage B3).
+ * (notes/auth-architecture.md).
  *
  * These prove the guard validates against the SESSION TABLE, not mere cookie
  * presence: an authed request passes, no cookie / a forged cookie / a post-
@@ -38,7 +38,7 @@ describe('route protection (B6–B9)', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        factId: `f-${randomBytes(5).toString('hex')}`,
+        entityId: `f-${randomBytes(5).toString('hex')}`,
         name: `Fact ${randomBytes(5).toString('hex')}`,
         context: 'Budgeting',
       }),

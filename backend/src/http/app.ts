@@ -4,6 +4,9 @@ import type { WebApiSetup } from '@event-driven-io/emmett-expressjs';
 import type { Auth } from '../auth/auth.ts';
 import type { AppEventStore } from '../eventStore.ts';
 import { businessFactApi } from '../domain/businessFact/api.ts';
+import { sliceApi } from '../domain/slice/api.ts';
+import { commandApi } from '../domain/command/api.ts';
+import { relationApi } from '../domain/relation/api.ts';
 
 export type BuildAuthAppDeps = {
   auth: Auth;
@@ -11,9 +14,9 @@ export type BuildAuthAppDeps = {
 };
 
 /**
- * SINGLE source of HTTP assembly (notes/auth-build-plan.md §4 stage B3, §6
- * gotcha #1). Both `index.ts` (prod) and the integration harness import THIS —
- * the middleware ordering is exercised once, never duplicated.
+ * SINGLE source of HTTP assembly. Both `index.ts` (prod) and the integration
+ * harness import THIS — the middleware ordering is exercised once, never
+ * duplicated.
  *
  * Ordering is load-bearing:
  *  1. `GET /api/health` → cheap readiness probe (Playwright `webServer.url`), no
@@ -49,7 +52,12 @@ export const buildAuthApp = ({
   app.use(express.json());
 
   // 4. Domain WebApiSetup routers, mounted under the `/api` namespace.
-  const apis: WebApiSetup[] = [businessFactApi(eventStore, auth)];
+  const apis: WebApiSetup[] = [
+    businessFactApi(eventStore, auth),
+    sliceApi(eventStore, auth),
+    commandApi(eventStore, auth),
+    relationApi(eventStore, auth),
+  ];
   const apiRouter = Router();
   for (const setup of apis) setup(apiRouter);
   app.use('/api', apiRouter);

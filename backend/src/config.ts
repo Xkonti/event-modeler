@@ -16,6 +16,12 @@ export const connectionString =
   process.env.POSTGRESQL_CONNECTION_STRING ??
   `postgresql://${pgUser}:${pgPassword}@${pgHost}:${pgPort}/${pgDb}`;
 
+// Emmett's read-model consumer (src/consumers.ts) resolves its DB connection from
+// POSTGRESQL_CONNECTION_STRING. When only POSTGRES_* parts are set (the devbox
+// default), surface the built string into the env so `startConsumers()` finds it —
+// otherwise its projectors throw "processor is missing connection string" at boot.
+process.env.POSTGRESQL_CONNECTION_STRING ??= connectionString;
+
 export const port = Number(process.env.PORT ?? 3000);
 
 /** True in a production deployment (`NODE_ENV=production`). */
@@ -24,7 +30,7 @@ export const isProduction = process.env.NODE_ENV === 'production';
 /**
  * better-auth browser-facing (proxied) origin. In dev the Vite proxy makes the
  * browser see `:5173`; better-auth must issue cookies for THAT origin
- * (notes/auth-build-plan.md §1). Backend still binds `:3000`.
+ * (notes/frontend-architecture.md: API seam). Backend still binds `:3000`.
  *
  * In production the session cookie's `Secure` attribute is derived from this
  * being https — fail LOUD if a prod deploy leaves it http (would ship session

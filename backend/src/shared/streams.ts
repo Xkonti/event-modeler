@@ -31,3 +31,12 @@ export const userStreamId = (id: string): string => streamId('user', id);
  * Keyed on the PK so every `where:[{field:'id'}]` is a direct stream lookup.
  */
 export const accountStreamId = (id: string): string => streamId('account', id);
+
+/** One stream per slice: `slice-{entityId}` (holds the slice's placements). */
+export const sliceStreamId = (id: string): string => streamId('slice', id);
+
+/** One stream per command entity: `command-{entityId}`. */
+export const commandStreamId = (id: string): string => streamId('command', id);
+
+/** One stream per relation: `relation-{entityId}` (references both endpoints). */
+export const relationStreamId = (id: string): string => streamId('relation', id);

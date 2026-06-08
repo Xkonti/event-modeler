@@ -15,8 +15,8 @@ import { requireAuth } from '../../auth/requireAuth.ts';
  * queries the async catalog read model.
  *
  * WRITE routes (POST/PUT/DELETE) are guarded by `requireAuth(auth)` — no valid
- * session ⇒ 401 before any decider runs (notes/auth-build-plan.md §4 stage B3,
- * §7). The GET read endpoint stays OPEN in v1. `buildAuthApp` mounts this router
+ * session ⇒ 401 before any decider runs (notes/auth-architecture.md: guard
+ * writes only in v1). The GET read endpoint stays OPEN in v1. `buildAuthApp` mounts this router
  * under `/api`, so the live paths are `/api/business-facts*`.
  */
 export const businessFactApi =
@@ -54,10 +54,10 @@ export const businessFactApi =
     };
 
     router.post('/business-facts', guard, (req: Request, res: Response) => {
-      const { factId, name, context } = req.body;
-      void run(res, factId, {
+      const { entityId, name, context } = req.body;
+      void run(res, entityId, {
         type: 'DefineBusinessFact',
-        data: { factId, name, context },
+        data: { entityId, name, context },
       });
     });
 
@@ -65,11 +65,11 @@ export const businessFactApi =
       '/business-facts/:id/name',
       guard,
       (req: Request, res: Response) => {
-        const factId = req.params.id;
-        if (!factId) return void res.status(400).json({ error: 'missing id' });
-        void run(res, factId, {
+        const entityId = req.params.id;
+        if (!entityId) return void res.status(400).json({ error: 'missing id' });
+        void run(res, entityId, {
           type: 'RenameBusinessFact',
-          data: { factId, name: req.body.name },
+          data: { entityId, name: req.body.name },
         });
       },
     );
@@ -78,11 +78,11 @@ export const businessFactApi =
       '/business-facts/:id',
       guard,
       (req: Request, res: Response) => {
-        const factId = req.params.id;
-        if (!factId) return void res.status(400).json({ error: 'missing id' });
-        void run(res, factId, {
+        const entityId = req.params.id;
+        if (!entityId) return void res.status(400).json({ error: 'missing id' });
+        void run(res, entityId, {
           type: 'ArchiveBusinessFact',
-          data: { factId },
+          data: { entityId },
         });
       },
     );

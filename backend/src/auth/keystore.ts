@@ -3,11 +3,10 @@
  *
  * THIS table is the shred lever: each row holds one user's DEK wrapped under the
  * KEK. Deleting the row makes all that user's ciphertext (PII events + their
- * account secrets) permanently unrecoverable (notes/auth-architecture.md §2.3,
- * §3.6).
+ * account secrets) permanently unrecoverable (notes/auth-architecture.md).
  *
  * Plain `pg` (not Bun-specific) so it runs under both Bun and Node — the latter
- * for testcontainers integration (notes/auth-build-plan.md §6 gotcha #3). Each
+ * for testcontainers integration. Each
  * fn opens + closes its own short-lived client, taking a connection string like
  * the migrations module; an optional already-connected client lets the adapter
  * run a put inside a wider unit of work.

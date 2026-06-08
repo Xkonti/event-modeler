@@ -10,7 +10,7 @@ const given = DeciderSpecification.for({ decide, evolve, initialState });
 
 const defined = {
   type: 'BusinessFactDefined' as const,
-  data: { factId: 'f1', name: 'BudgetYearDefined', context: 'Budgeting' },
+  data: { entityId: 'f1', name: 'BudgetYearDefined', context: 'Budgeting' },
 };
 
 describe('businessFact decider', () => {
@@ -18,7 +18,7 @@ describe('businessFact decider', () => {
     given([])
       .when({
         type: 'DefineBusinessFact',
-        data: { factId: 'f1', name: 'BudgetYearDefined', context: 'Budgeting' },
+        data: { entityId: 'f1', name: 'BudgetYearDefined', context: 'Budgeting' },
       })
       .then([defined]);
   });
@@ -27,34 +27,34 @@ describe('businessFact decider', () => {
     given([defined])
       .when({
         type: 'DefineBusinessFact',
-        data: { factId: 'f1', name: 'Other', context: 'Budgeting' },
+        data: { entityId: 'f1', name: 'Other', context: 'Budgeting' },
       })
       .thenThrows();
   });
 
   it('renames an active fact', () => {
     given([defined])
-      .when({ type: 'RenameBusinessFact', data: { factId: 'f1', name: 'BudgetYearOpened' } })
+      .when({ type: 'RenameBusinessFact', data: { entityId: 'f1', name: 'BudgetYearOpened' } })
       .then([
-        { type: 'BusinessFactRenamed', data: { factId: 'f1', name: 'BudgetYearOpened' } },
+        { type: 'BusinessFactRenamed', data: { entityId: 'f1', name: 'BudgetYearOpened' } },
       ]);
   });
 
   it('rejects renaming a fact that is not defined', () => {
     given([])
-      .when({ type: 'RenameBusinessFact', data: { factId: 'f1', name: 'X' } })
+      .when({ type: 'RenameBusinessFact', data: { entityId: 'f1', name: 'X' } })
       .thenThrows();
   });
 
   it('archives an active fact', () => {
     given([defined])
-      .when({ type: 'ArchiveBusinessFact', data: { factId: 'f1' } })
-      .then([{ type: 'BusinessFactArchived', data: { factId: 'f1' } }]);
+      .when({ type: 'ArchiveBusinessFact', data: { entityId: 'f1' } })
+      .then([{ type: 'BusinessFactArchived', data: { entityId: 'f1' } }]);
   });
 
   it('rejects archiving an already-archived fact', () => {
-    given([defined, { type: 'BusinessFactArchived', data: { factId: 'f1' } }])
-      .when({ type: 'ArchiveBusinessFact', data: { factId: 'f1' } })
+    given([defined, { type: 'BusinessFactArchived', data: { entityId: 'f1' } }])
+      .when({ type: 'ArchiveBusinessFact', data: { entityId: 'f1' } })
       .thenThrows();
   });
 });

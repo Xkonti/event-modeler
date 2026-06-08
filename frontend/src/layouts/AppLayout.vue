@@ -6,12 +6,13 @@
 // Logout goes through authRepository.logout() (clears the cookie server-side →
 // reactive useSession flips to null → guards react). We also router.push to
 // /login immediately rather than waiting for the next guarded navigation.
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { useUiStore } from '@/stores/ui'
 import { logout } from '@/repositories/authRepository'
 import Button from '@/components/ui/Button.vue'
 
+const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 const ui = useUiStore()
@@ -22,6 +23,9 @@ async function onLogout() {
   try {
     await logout()
   } finally {
+    // Refresh the reactive session (cookie now cleared) so it flips to null before
+    // navigating — else the guard's authed+public→home rule bounces /login back to /.
+    await session.refresh()
     router.push('/login')
   }
 }
@@ -55,10 +59,49 @@ async function onLogout() {
           >
             Home
           </RouterLink>
+          <!-- Slices are created/opened from Home ("New slice"); this links back
+               to the model overview (Home for now). -->
+          <RouterLink
+            data-testid="nav-slices"
+            to="/"
+            class="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+            active-class="bg-gray-100 text-gray-900"
+          >
+            Slices
+          </RouterLink>
         </nav>
       </aside>
 
-      <main class="flex-1 p-6">
+      <main class="relative flex-1" :class="route.meta.fullBleed ? 'p-0' : 'p-6'">
+        <!-- Banner outlet: transient ui-store banners (mutation errors etc.).
+             Absolute over content so it overlays the canvas without reflowing it. -->
+        <div
+          v-if="ui.banners.length"
+          class="pointer-events-none absolute inset-x-0 top-0 z-30 space-y-2 p-4"
+        >
+          <div
+            v-for="banner in ui.banners"
+            :key="banner.id"
+            data-testid="app-banner"
+            class="pointer-events-auto flex items-start justify-between gap-3 rounded-md border px-4 py-2 text-sm shadow-sm"
+            :class="{
+              'border-red-200 bg-red-50 text-red-800': banner.kind === 'error',
+              'border-green-200 bg-green-50 text-green-800': banner.kind === 'success',
+              'border-gray-200 bg-white text-gray-800': banner.kind === 'info',
+            }"
+          >
+            <span>{{ banner.text }}</span>
+            <button
+              :data-testid="`app-banner-dismiss-${banner.id}`"
+              class="shrink-0 rounded px-1 leading-none text-current/60 hover:text-current"
+              aria-label="Dismiss"
+              @click="ui.dismissBanner(banner.id)"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+
         <slot />
       </main>
     </div>

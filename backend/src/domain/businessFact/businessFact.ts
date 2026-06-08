@@ -14,8 +14,8 @@ import type { BusinessFactEvent } from './events.ts';
 
 export type BusinessFact =
   | { status: 'empty' }
-  | { status: 'active'; factId: string; name: string; context: string }
-  | { status: 'archived'; factId: string };
+  | { status: 'active'; entityId: string; name: string; context: string }
+  | { status: 'archived'; entityId: string };
 
 export const initialState = (): BusinessFact => ({ status: 'empty' });
 
@@ -23,15 +23,15 @@ export const initialState = (): BusinessFact => ({ status: 'empty' });
 
 export type DefineBusinessFact = Command<
   'DefineBusinessFact',
-  { factId: string; name: string; context: string }
+  { entityId: string; name: string; context: string }
 >;
 export type RenameBusinessFact = Command<
   'RenameBusinessFact',
-  { factId: string; name: string }
+  { entityId: string; name: string }
 >;
 export type ArchiveBusinessFact = Command<
   'ArchiveBusinessFact',
-  { factId: string }
+  { entityId: string }
 >;
 
 export type BusinessFactCommand =
@@ -49,15 +49,15 @@ export const decide = (
     case 'DefineBusinessFact': {
       if (state.status !== 'empty')
         throw new IllegalStateError('Business fact already defined');
-      const { factId, name, context } = command.data;
-      return { type: 'BusinessFactDefined', data: { factId, name, context } };
+      const { entityId, name, context } = command.data;
+      return { type: 'BusinessFactDefined', data: { entityId, name, context } };
     }
     case 'RenameBusinessFact': {
       if (state.status !== 'active')
         throw new IllegalStateError('Can only rename an active business fact');
       return {
         type: 'BusinessFactRenamed',
-        data: { factId: command.data.factId, name: command.data.name },
+        data: { entityId: command.data.entityId, name: command.data.name },
       };
     }
     case 'ArchiveBusinessFact': {
@@ -65,7 +65,7 @@ export const decide = (
         throw new IllegalStateError('Can only archive an active business fact');
       return {
         type: 'BusinessFactArchived',
-        data: { factId: command.data.factId },
+        data: { entityId: command.data.entityId },
       };
     }
   }
@@ -79,14 +79,14 @@ export const evolve = (
 ): BusinessFact => {
   switch (event.type) {
     case 'BusinessFactDefined': {
-      const { factId, name, context } = event.data;
-      return { status: 'active', factId, name, context };
+      const { entityId, name, context } = event.data;
+      return { status: 'active', entityId, name, context };
     }
     case 'BusinessFactRenamed':
       return state.status === 'active'
         ? { ...state, name: event.data.name }
         : state;
     case 'BusinessFactArchived':
-      return { status: 'archived', factId: event.data.factId };
+      return { status: 'archived', entityId: event.data.entityId };
   }
 };

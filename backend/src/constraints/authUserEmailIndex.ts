@@ -5,7 +5,7 @@ import type { UserEvent } from '../domain/user/events.ts';
 /**
  * CONSTRAINT projection (not a read model) — email blind-index lookup AND global
  * email uniqueness. Registered INLINE → these statements run in the SAME
- * transaction as the user-event append (notes/auth-architecture.md §2.4).
+ * transaction as the user-event append (notes/auth-architecture.md).
  *
  * The `auth_user_email_index.email_hash` PRIMARY KEY rejects a colliding email:
  * the INSERT throws → the append tx rolls back → the adapter `create`/email

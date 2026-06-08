@@ -9,7 +9,7 @@ import type { AccountEvent } from './events.ts';
  * opaque ciphertext + non-secret plaintext (userId/providerId).
  *
  * Cross-aggregate `(providerId, providerAccountId)` uniqueness is enforced by
- * the inline `auth_account_index` constraint, not here (§2.5).
+ * the inline `auth_account_index` constraint, not here (notes/auth-architecture.md).
  */
 
 // --- State ---------------------------------------------------------------

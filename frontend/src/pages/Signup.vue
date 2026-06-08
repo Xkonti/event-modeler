@@ -8,6 +8,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { register } from '@/repositories/authRepository'
+import { useSessionStore } from '@/stores/session'
 import FormField from '@/components/ui/FormField.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
@@ -23,6 +24,7 @@ const error = ref('')
 const busy = ref(false)
 
 const router = useRouter()
+const sessionStore = useSessionStore()
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -47,6 +49,8 @@ async function submit() {
     error.value = r.error || 'Sign up failed'
     return
   }
+  // Refresh the reactive session (cookie is now set) so the guard sees authed.
+  await sessionStore.refresh()
   router.replace('/')
 }
 </script>
