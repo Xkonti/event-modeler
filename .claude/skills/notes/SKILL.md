@@ -60,6 +60,17 @@ Ongoing duty — you own the structure:
 
 `notes/index.md` MUST exist + describe current org. Each entry: path → what it holds + maturity (thoughts vs decisions). Read it first, sync it after every change.
 
+## Scope: Patterns, Not Implementation
+
+Notes hold **overall patterns + system-design thinking** — not how to build a specific feature. The line:
+
+- **In scope:** the *what* and *why* — domain concepts, design patterns, the approach we want for some part of the system, decisions + their rationale, tradeoffs, open questions. "Auth uses crypto-shredding: a per-user key whose deletion makes the data unrecoverable" = a pattern → keep.
+- **Out of scope:** the *how-in-code* — actual code/snippets, code references (file paths, function/symbol names, line numbers), specific config values (env var names, ports, connection strings, key sizes), SQL DDL, API signatures, file/dir layouts, and **feature implementation plans / build steps**. These live in the code + its comments, not here.
+
+Litmus: would it go stale the moment someone renames a file, tweaks a value, or refactors? Then it's implementation → leave it out. Capture the durable idea instead.
+
+If the author brain-dumps implementation detail, extract the **pattern or decision** worth keeping and record THAT; drop the mechanics. When a note already carries implementation detail, strip it on the next `organize` pass.
+
 ## End Goal
 
 Notes mature into the source for formal requirements + business logic. When capturing + structuring, bias toward what a future requirements-writer will need: clear decisions, traceable rationale, surfaced open questions.
@@ -70,3 +81,4 @@ Notes mature into the source for formal requirements + business logic. When capt
 - Don't let `index.md` drift from real files.
 - Don't bulldoze with opinions after the user asked for plain capture.
 - Don't write formal requirements here — notes feed them later, separately.
+- Don't record implementation details — no code, code references, specific config values, SQL/DDL, API signatures, or feature build plans (see Scope). Capture the pattern/decision, not the mechanics.
