@@ -67,7 +67,7 @@ Session by session, left→right. Tech decisions deferred as long as possible (b
 
 Throughout: talk **data flow**, never technology (no DB / REST / queues). Both business + devs understand data flow.
 
-Each phase/pattern has (or will have) its own deep-dive skill, prefixed `em-`: **em-brainstorming** (phase 1), **em-wireframes** (phase 2), **em-commands** (phase 3 — commands, read models, backwards completeness check), **em-automations** (patterns 3+4 — automations, translations, external facts, applied per use case), **em-scenarios** (phase 4 — GWT/GT business rules per slice), **em-structuring** (organizing the model — swimlanes, chapters, multiple models, alt-flows, links; continuous + organize-pass). Load the relevant skill when actually running or explaining that step in detail.
+Each phase/pattern has its own deep-dive skill, prefixed `em-`: **em-brainstorming** (phase 1), **em-wireframes** (phase 2), **em-commands** (phase 3 — commands, read models, backwards completeness check), **em-automations** (patterns 3+4 — automations, translations, external facts, applied per use case), **em-scenarios** (phase 4 — GWT/GT business rules per slice), **em-structuring** (organizing the model — swimlanes, chapters, multiple models, alt-flows, links; continuous + organize-pass). Load the relevant skill when actually running or explaining that step in detail.
 
 ## Information Completeness Check
 
