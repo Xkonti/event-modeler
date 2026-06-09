@@ -1,5 +1,6 @@
 import type { PostgreSQLEventStoreConsumer } from '@event-driven-io/emmett-postgresql';
 import { eventStore } from './eventStore.ts';
+import { modelsProjection } from './read/models.ts';
 import { entityCatalogProjection } from './read/entityCatalog.ts';
 import { slicePlacementsProjection } from './read/slicePlacements.ts';
 import { relationsGraphProjection } from './read/relationsGraph.ts';
@@ -30,6 +31,7 @@ export const startConsumers = (): PostgreSQLEventStoreConsumer => {
   // The consumer resolves its DB connection from POSTGRESQL_CONNECTION_STRING
   // (config.ts surfaces the built string into the env). One consumer-owned pool,
   // closed cleanly on stop() — no per-projector pools to leak.
+  consumer.projector({ projection: modelsProjection, lock });
   consumer.projector({ projection: entityCatalogProjection, lock });
   consumer.projector({ projection: slicePlacementsProjection, lock });
   consumer.projector({ projection: relationsGraphProjection, lock });

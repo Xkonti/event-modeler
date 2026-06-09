@@ -3,6 +3,7 @@ import { toNodeHandler } from 'better-auth/node';
 import type { WebApiSetup } from '@event-driven-io/emmett-expressjs';
 import type { Auth } from '../auth/auth.ts';
 import type { AppEventStore } from '../eventStore.ts';
+import { modelApi } from '../domain/model/api.ts';
 import { businessFactApi } from '../domain/businessFact/api.ts';
 import { sliceApi } from '../domain/slice/api.ts';
 import { commandApi } from '../domain/command/api.ts';
@@ -53,6 +54,7 @@ export const buildAuthApp = ({
 
   // 4. Domain WebApiSetup routers, mounted under the `/api` namespace.
   const apis: WebApiSetup[] = [
+    modelApi(eventStore, auth),
     businessFactApi(eventStore, auth),
     sliceApi(eventStore, auth),
     commandApi(eventStore, auth),

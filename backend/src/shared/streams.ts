@@ -7,6 +7,7 @@
  * never its own table.
  */
 export type EntityType =
+  | 'model'
   | 'businessFact'
   | 'command'
   | 'readModel'
@@ -18,6 +19,9 @@ export type EntityType =
   | 'account';
 
 export const streamId = (type: EntityType, id: string): string => `${type}-${id}`;
+
+/** One stream per model (the root container): `model-{modelId}`. */
+export const modelStreamId = (id: string): string => streamId('model', id);
 
 export const businessFactStreamId = (id: string): string =>
   streamId('businessFact', id);
