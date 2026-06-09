@@ -114,7 +114,8 @@ SLICE  Entity Catalog                        [state view]
 ```
 
 **Per-type `definition` payload:**
-- businessFact / command / readModel / externalBusinessFact → `fields: [{fieldName, fieldType}]`.
+- businessFact / command / readModel / externalBusinessFact → `fields: [{fieldName, fieldType}]`
+  (`fieldType` = **free-form text**, not a fixed enum — O4).
 - wireframe → `content` (layout/text); edited via `UpdateWireframeContent` → *WireframeContentUpdated*.
 - automation → `triggerConfig { triggerType ∈ fact|timer|interaction, monitoredReadModelId?, issuedCommandId? }`.
 - translation → `mapping { direction ∈ inbound|outbound, pairs: [{externalField, internalField}] }`.
@@ -142,8 +143,11 @@ Defined/Renamed/Archived — but `triggerConfig` and `mapping` are editable. **A
 *TranslationMappingUpdated* (the analog of FieldsUpdated). **Resolved** in the **em-automations**
 phase (G3); recorded here so the catalog has an edit path.
 
-**Open — O4 (field type).** `fieldType` = a fixed enum (id/string/money/number/bool/ref/…) vs
-freeform text? Either is UI-sourced; affects later checkability. Flag; lean fixed-enum + "other".
+**Resolved — O4 (field type).** `fieldType` is **free-form text** (not a fixed enum). Decided by the
+user 2026-06-08. Rationale: simpler in ES — no enum migration / event upcasting when the type
+vocabulary grows (`event-sourcing-architecture.md` no-upcasting), and the completeness check is
+human/AI-assisted, not strict type-matching (`validation.md`), so a constrained enum buys little.
+UI-sourced free string; checkability stays semantic/presence-based.
 
 ---
 
@@ -185,9 +189,11 @@ Notes: the lane is **intrinsic to the fact's identity** (`notes/swimlanes.md`) �
 lane). Only `businessFact` / `externalBusinessFact` may be assigned (commands/read models are
 lane-agnostic) — the command is rejected for other types.
 
-**Open — O5 (external fact lane).** External facts "get their own lane." Auto-assign a lane at
-define, or assign explicitly like internal facts? Lean: explicit, same path, but allow a
-distinct "external" rendering. Flag.
+**Resolved — O5 (external fact lane).** External facts are assigned a lane **explicitly**, via the
+**same** `AssignBusinessFactToContext` / `ClearBusinessFactContext` path as internal facts — **no**
+auto-assign at define. Decided by the user 2026-06-08. They render **distinctly** (yellow /
+"external" styling); only the rendering differs, the assignment mechanism is uniform. (Amends
+wireframes W5/6 — the external-fact inspector keeps a Lane control.)
 
 ---
 
@@ -201,17 +207,22 @@ SLICE  Define Slice                          [state change]
   gaps     —
 
 SLICE  Place Entity                          [state change]
-  command  PlaceEntity { modelId, sliceId, placedEntityId, order }
-  fact     EntityPlaced { modelId, sliceId, placedEntityId, slotRole, order }
+  command  PlaceEntity { modelId, sliceId, placedEntityId, slot? }
+  fact     EntityPlaced { modelId, sliceId, placedEntityId, slotRole, slot? }
   sources  placedEntityId ← catalog selection (must exist)
            slotRole       ← COMPUTED from the entity's type (see F3)
-           order          ← UI (position within its slot/lane)
+           slot           ← UI (integer vertical index within the role band, 0 = top);
+                            OMITTED for single-cardinality bands (command, automation, translation)
+  card     command / automation / translation → ONE per slice (no slot);
+           wireframes / read models / business facts → MANY (slot-numbered)
   gaps     —
 
-SLICE  Move (reorder) / Remove Placement     [state change]
-  command  MoveEntity { modelId, sliceId, placedEntityId, order } → EntityMoved
+SLICE  Swap Placement Slots / Remove          [state change]
+  command  SwapEntitySlots { modelId, sliceId, entityIdA, entityIdB } → EntitySlotsSwapped
   command  RemoveEntityFromSlice { modelId, sliceId, placedEntityId } → EntityRemovedFromSlice
-  sources  order ← UI
+  sources  entityIdA / entityIdB ← the two placements being reordered (same role band)
+  note     reordering on the graph = swap two slot numbers (the single reorder primitive);
+           no cross-band moves (band fixed by type; a fact's lane changes only via Flow 2 re-assign)
   gaps     —
 
 SLICE  Rename / Archive Slice                [state change]
@@ -221,11 +232,11 @@ SLICE  Rename / Archive Slice                [state change]
 
 SLICE  Slice Canvas  (the money read model)   [state view]
   read model  slice_canvas { sliceId, modelId, name,
-                placements: [{ placedEntityId, slotRole, lane, order, name, entityType,
+                placements: [{ placedEntityId, slotRole, lane, slot, name, entityType,
                                definition }],
                 relations:  [{ relationId, fromId, toId, kind, meta }],
                 scenarios:  [ …auto-surfaced by anchor/fact ids… ] }
-  fed by      SliceDefined, EntityPlaced/Moved/Removed                (placement set)
+  fed by      SliceDefined, EntityPlaced/SlotsSwapped/Removed         (placement set)
             ⋈ entity_catalog  → name, entityType, definition, lane(=contextId)
             ⋈ relations_graph → edges among visible entities (Flow 4)
             ⋈ scenarios       → rules anchored on / referencing visible entities (Flow 5)
@@ -235,20 +246,24 @@ SLICE  Slice Canvas  (the money read model)   [state view]
   gaps        —
 ```
 
-**Discovered — F3 (placement = slot/order, lane derived; NOT x/y).** Backend stores
-`EntityPlaced { x, y }` (freeform). Snap slots mean the **slot is a function of the entity's
-type** — wireframe/automation/translation→`trigger`, command→`command`, readModel→`readModel`
-(same band, distinct sub-role), fact/externalFact→`fact`. So the user never picks a slot; the
-command supplies only **`order`**, and `slotRole` is **computed at placement** from the type.
-The **lane is NOT stored on the placement** — it is the fact's intrinsic `contextId`, joined at
-render → no drift, and re-homing a fact's lane (Flow 2) updates every slice for free. x/y
-becomes a pure layout-solver output. **FIX** (amends `slice/events.ts`, `slice/slice.ts`,
-`read/slicePlacements.ts`).
+**Discovered — F3 (placement = slot number, lane derived; NOT x/y).** _[refined by the user
+2026-06-08]_ Backend stores `EntityPlaced { x, y }` (freeform). Snap slots mean the **role band is
+a function of the entity's type** — wireframe→`trigger`, automation/translation→`trigger`,
+command→`command`, readModel→`readModel` (same band, distinct sub-role), fact/externalFact→`fact`.
+The user never picks a band; the placement records only a **`slot`** — an integer vertical index
+within that band (`0` = top, `1` below it). `slotRole` is **computed at placement** from the type.
+**Cardinality:** command / automation / translation are **single** per slice (no slot);
+**wireframes, read models, and business facts are multiple**, each slot-numbered (e.g. 4 facts off
+one command → slots 0,1,2,3). **Reordering = swapping the slot numbers of two placements**
+(`SwapEntitySlots`) — the sole reorder primitive; no cross-band moves. The **lane is NOT stored on
+the placement** — it is the fact's intrinsic `contextId`, joined at render → no drift, and re-homing
+a fact's lane (Flow 2) updates every slice for free. x/y is gone (pure layout-solver output if ever
+needed). **FIX** (amends `slice/events.ts`, `slice/slice.ts`, `read/slicePlacements.ts`).
 
-**Discovered — refines W4 "drag to another slot".** Since slot = type, you **cannot** drag a
-command into the facts band. `MoveEntity` is a **reorder within the slot/lane only**; changing
-a fact's lane is a Flow-2 re-assignment (global to the fact), not a placement move. **Amends
-wireframes W4.**
+**Discovered — refines W4 "drag to another slot".** Since the band = type, you **cannot** drag a
+command into the facts band. Reordering is `SwapEntitySlots` — a **slot swap between two placements
+in the same band**; changing a fact's lane is a Flow-2 re-assignment (global to the fact), not a
+placement move. **Amends wireframes W4.**
 
 Placement invariant (one placement per `(slice, entity)`) stays a single-stream rule — the
 slice decider already owns it; no cross-aggregate constraint needed.
@@ -309,9 +324,10 @@ SLICE  Define Scenario (GWT)                 [state change]
   gaps     —  (dangling ref → out-of-sync flag, not a block)
 
 SLICE  Define Scenario (GT)                  [state change]
-  command  DefineScenario { modelId, scenarioId, kind:'GT', anchorReadModelId,
+  command  DefineScenario { modelId, scenarioId, kind:'GT', anchorEntityId,
                             given:[orderedFactId…], then:{ projectedState } }   (NO when)
-  sources  anchorReadModelId ← UI (pick read model);  given factIds ← UI;  then ← UI example
+  anchor   anchorEntityId ∈ { readModel | automation } — both take G/T (no command → no When)
+  sources  anchorEntityId ← UI (pick read model or automation);  given factIds ← UI;  then ← UI example
   gaps     —
 
 SLICE  Update / Archive Scenario             [state change]
@@ -472,7 +488,7 @@ model(s) it feeds → status (✓ verified | ⚠ open ref | 🔒 built/auth).
 | ContextDefined/Renamed/Archived | DefineContext/RenameContext/ArchiveContext | contexts | ✓ |
 | BusinessFactAssignedToContext / ContextCleared | AssignBusinessFactToContext / ClearBusinessFactContext | entity_catalog.contextId, contexts | ✓ |
 | BusinessFactDefined/Renamed/FieldsUpdated/Archived | DefineBusinessFact/Rename/UpdateFields/Archive | entity_catalog, slice_canvas | ✓ (F2/F5) |
-| ExternalBusinessFact Defined/Renamed/FieldsUpdated/Archived | DefineExternalBusinessFact/… | entity_catalog | ✓ (O5) |
+| ExternalBusinessFact Defined/Renamed/FieldsUpdated/Archived | DefineExternalBusinessFact/… | entity_catalog | ✓ (O5: explicit lane) |
 | Command Defined/Renamed/FieldsUpdated/Archived | DefineCommand/… | entity_catalog, slice_canvas | ✓ |
 | ReadModel Defined/Renamed/FieldsUpdated/Archived | DefineReadModel/… | entity_catalog, slice_canvas | ✓ |
 | Wireframe Defined/Renamed/ContentUpdated/Archived | DefineWireframe/…/UpdateWireframeContent | entity_catalog, slice_canvas | ✓ |
@@ -480,8 +496,8 @@ model(s) it feeds → status (✓ verified | ⚠ open ref | 🔒 built/auth).
 | AutomationReconfigured | ReconfigureAutomation | entity_catalog | ✓ (G3) |
 | Translation Defined/Renamed/Archived | DefineTranslation/… | entity_catalog | ✓ (G3) |
 | TranslationMappingUpdated | UpdateTranslationMapping | entity_catalog | ✓ (G3) |
-| SliceCreated/Renamed/Archived | DefineSlice/RenameSlice/ArchiveSlice | slice_canvas, models.sliceCount | ✓ |
-| EntityPlaced/Moved/RemovedFromSlice | PlaceEntity/MoveEntity/RemoveEntityFromSlice | slice_placements, slice_canvas | ✓ (F3) |
+| SliceDefined/Renamed/Archived | DefineSlice/RenameSlice/ArchiveSlice | slice_canvas, models.sliceCount | ✓ |
+| EntityPlaced/SlotsSwapped/RemovedFromSlice | PlaceEntity/SwapEntitySlots/RemoveEntityFromSlice | slice_placements, slice_canvas | ✓ (F3) |
 | RelationDrawn/InfoUpdated/Removed | DrawRelation/UpdateRelationInfo/RemoveRelation | relations_graph, slice_canvas | ✓ (F4) |
 | Scenario(GWT/GT) Defined/Updated/Archived | DefineScenario/UpdateScenario/ArchiveScenario | scenarios, slice_canvas | ✓ (F6) |
 | AccountRegistered/EmailVerified/LoggedIn/LoggedOut/AccountDeleted | Register/VerifyEmail/LogIn/LogOut/DeleteAccount | session/user/account | 🔒 |
@@ -502,12 +518,12 @@ facts, O1/O2 publish/import semantics) — **all now resolved in `em-automations
 | **F1** | `modelId` threads through **every** command/fact/read model; read models scoped by it | all backend events (none carry modelId) |
 | **F1b** | Name uniqueness is **per-model** → constraint key `(modelId, normalized_name)` | `constraints/entityNames.ts` |
 | **F2** | Drop the `context` **string** from entity definitions; lane = the Context entity via assignment; name-prefix is a display convention, not stored | `businessFact/events.ts`, `command/events.ts`, catalog |
-| **F3** | Placement = `{ slotRole(computed from type), order }`; **lane derived** from the fact's `contextId`, not stored on the placement; x/y is layout-solver output | `slice/events.ts`, `slice/slice.ts`, `read/slicePlacements.ts`; refines wireframes W4 (Move = reorder, not cross-slot) |
+| **F3** | Placement = `{ slotRole(computed from type), slot(int, 0=top) }`; command/automation/translation single (no slot), wireframes/read-models/facts multiple; **lane derived** from `contextId`; reorder = slot **swap** (`SwapEntitySlots`); no x/y | `slice/events.ts`, `slice/slice.ts`, `read/slicePlacements.ts`; refines wireframes W4 |
 | **F4** | `RelationDrawn` stores `{ kind, meta }`; `relations_graph` stores kind (was derived) | `relation/events.ts`, `read/relationsGraph.ts`, `slice/api.ts` |
 | **F5** | `entity_catalog` carries the `definition` payload (fields/content) + `contextId` | `read/entityCatalog.ts` |
 | **F6** | `scenarios` read model indexed by anchorId **and** every referencedEntityId (auto-surface) | new read model |
 
-**Decisions (G1/G3/O1/O2 RESOLVED in `em-automations-results.md`; O4/O5 still open):**
+**Decisions (G1/G3/O1/O2 RESOLVED in `em-automations-results.md`; O4/O5 RESOLVED by the user 2026-06-08):**
 
 | # | Item | Disposition |
 |---|---|---|
@@ -515,8 +531,8 @@ facts, O1/O2 publish/import semantics) — **all now resolved in `em-automations
 | **G3** | automation `triggerConfig` + translation `mapping` have no edit fact | **RESOLVED** → `AutomationReconfigured` / `TranslationMappingUpdated` added |
 | **O1** | Export: recorded audit fact vs pure query | **RESOLVED** → state view, no fact; `Model Exported` dropped |
 | **O2** | Import semantics (replay-as-commands vs event-log; round-trip; merge/replace) | **RESOLVED (v1)** → explicit replay, ids preserved, fresh model; merge later |
-| **O4** | `fieldType`: fixed enum vs freeform | open — lean: fixed enum + "other" |
-| **O5** | external-fact lane: auto vs explicit | open — lean: explicit, distinct rendering |
+| **O4** | `fieldType`: fixed enum vs freeform | **RESOLVED** → **free-form text** (ES simplicity; no enum migration / upcasting) |
+| **O5** | external-fact lane: auto vs explicit | **RESOLVED** → **explicit** assign (same path as facts), distinct rendering |
 
 **DERIVED fields (no source fact — tag so the check doesn't chase phantoms):**
 `models.sliceCount`, `models.lastEditedAt`, `contexts.factCount`, `publish_diff.changeCount` /

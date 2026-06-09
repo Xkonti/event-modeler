@@ -31,9 +31,10 @@ Scan of the model for non-user-driven work:
 | **NOT an automation** | Projection consumers + inline constraints = mechanics | §Boundary |
 | **Timer** | *(none in v1 — no expiry/scheduling in the modeling domain)* | — |
 
-Three of the reactions turn out **not** to be background automations (A1 scenario-sync, A2
-archive-cascade, A7 status-marking) — finding that is part of the value. The system-boundary
-three (T1–T3) are the real new v1 slices; A5–A6 + §Identity/§Boundary come from mining `notes/`.
+Two of the reactions turn out **not** to be background automations (A1 scenario-sync, A7
+status-marking) — finding that is part of the value; **A2 archive-cascade became a real automation**
+(cascade cleanup, em-scenarios E4, 2026-06-08). The system-boundary three (T1–T3) are the real new
+v1 slices; A5–A6 + §Identity/§Boundary come from mining `notes/`.
 
 ---
 
@@ -98,7 +99,7 @@ TRANSLATION (inbound)  Import Model                        [translation = state 
 STATE VIEW  Export Model                                   [state view → file artifact]
   reads        model_export (read model): whole model, CURRENT STATE (not history)
                  entities[] (name,type,fields/content,lane), relations[] (from,to,kind,meta),
-                 slices[] + placements[] (slotRole,order), contexts[], groups[], scenarios[]
+                 slices[] + placements[] (slotRole,slot), contexts[], groups[], scenarios[]
   fed by       every Define*/Update*/Assign*/Draw*/Place*/Scenario* fact in the model
   outputs      two distinct serializations (notes/serialization.md):
                  • automation-JSON — whole-model, round-trips with T1 Import (ids preserved)
@@ -180,7 +181,7 @@ test fails on purpose: there's no task to tick off — the flag is just a live r
 
 ---
 
-# A2 — Entity-archive cascade  *(decision → no automation in v1)*
+# A2 — Entity-archive cascade  *(RESOLVED: cascade cleanup — em-scenarios E4, 2026-06-08)*
 
 When an entity is archived, its placements and relations become ghosts. Options:
 - **(a) read-time ghost-drop** — `slice_canvas` already drops placements whose catalog entry is
@@ -190,11 +191,14 @@ When an entity is archived, its placements and relations become ghosts. Options:
   entity → issue `RemoveEntityFromSlice` / `RemoveRelation` per occurrence (fan-out) → removal
   facts; todo opens on archive, closes per removal.
 
-**Lean: (a) for v1.** Archive is terminal (no un-archive command), so dangling refs to a
-permanently-archived entity are harmless and hidden. A cleanup automation is pure housekeeping —
-defer. **Decision to surface (D-archive):** confirm read-time-drop is acceptable, or do we want
-the cascade for a tidy store/export? (Export currently would still carry the dangling refs — a
-small reason to prefer (b) later.)
+**RESOLVED — (b) cascade cleanup** (user decision E4, em-scenarios, 2026-06-08; supersedes the
+earlier (a) lean). `*Archived` **triggers** the cascade automation: fan-out `RemoveEntityFromSlice` /
+`RemoveRelation` per placement/relation; todo opens on archive, closes when all refs removed.
+Rationale: a tidy store/**export** (Export no longer carries dangling refs) + archive is terminal so
+cleanup is safe. **(a) read-time ghost-drop survives only as a render-time backstop** for the brief
+eventual-consistency window before the cascade completes. Cascade-driven `RemoveRelation` flags
+dependent scenarios out-of-sync but does **not** prompt (the A1 prompt is user-driven only). Full GT
+scenarios: `spec/em-scenarios-results.md` § Entity Archive Cascade.
 
 ---
 
@@ -382,8 +386,8 @@ closing/subtractive fact.
    AI-semantic = the MCP/AI channel.
 4. **D-publish — failure + conflict.** Failure → **`ModelPublishFailed`** + manual retry; GitHub
    hand-edit conflict surfaces as a **PR merge conflict on GitHub** (one-way; not read back in v1).
-5. **D-archive — read-time ghost-drop** (no cascade automation) in v1; revisit if export should
-   be tidy.
+5. **D-archive — RESOLVED: cascade cleanup** (E4, em-scenarios) — `*Archived` fan-out-removes
+   placements/relations; read-time ghost-drop kept only as a render backstop. (was: read-time drop)
 6. **D-validate — on-demand** validation in v1 (not continuous); always advisory, never gates.
 7. **D-ai — AI = a command source** under its own session; MCP transport deferred.
 8. **D-publish-scope — publish is session-scoped** (the session's tagged changes), with a
@@ -415,10 +419,10 @@ all have a recommended lean; confirm or adjust.)
 ## Status
 
 - **Background work fully scanned** (model + `notes/`). System-boundary flows (T1 Import, T2
-  Export, T3 Publish) modeled with todo-lists, contracts, and failure facts. Three suspected
-  automations (A1 scenario-sync, A2 archive-cascade, A7 status-marking) shown to be **not**
-  background automations (derived / read-time / user-driven). A3 validation + A5 where-used are
-  the cycle-guarded **analyses**. A4 AI reuses the whole command surface. **No timer automations
+  Export, T3 Publish) modeled with todo-lists, contracts, and failure facts. A1 scenario-sync + A7
+  status-marking shown to be **not** background automations (derived / user-driven); **A2
+  archive-cascade became a real automation** (cascade cleanup — em-scenarios E4). A3 validation +
+  A5 where-used are the cycle-guarded **analyses**. A4 AI reuses the whole command surface. **No timer automations
   in v1.**
 - **From `notes/`:** A6 session ownership/claims + collision-merge is **future** (an inline
   `entity_claims` constraint + a live session-merge flow — not a v1 automation); the §Boundary

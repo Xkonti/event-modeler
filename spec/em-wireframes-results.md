@@ -57,9 +57,10 @@ v1 is **single-user, screen-shared, small focused scope**. So we split:
 Every business fact still has a screen below (the user's goal: *all facts complete +
 reviewed*); the v1/later tag says what gets **built first**, not what's omitted.
 
-> **Amendments — reconciled with Phases 3–4.** **F3:** placement is `{slotRole, order}` —
-> `slotRole` computed from entity type, **lane derived** from the fact's Context (not stored);
-> "Moved" = reorder within a slot/lane only. **G1 resolved:** `publishes` targets an
+> **Amendments — reconciled with Phases 3–4.** **F3:** placement is `{slotRole, slot}` —
+> `slotRole` computed from entity type, `slot` = integer index (0=top), **lane derived** from the
+> fact's Context (not stored); command/automation/translation single (no slot),
+> wireframes/read-models/facts multiple; reorder = **slot swap** (`SwapEntitySlots`). **G1 resolved:** `publishes` targets an
 > `externalBusinessFact` (yellow); `externalSystem` removed. **G3 resolved:** automation →
 > `AutomationReconfigured`, translation → `TranslationMappingUpdated`. **O1:** `Model Exported`
 > is a state-view query, not a fact. **F1:** every entity carries `modelId`; names unique
@@ -83,14 +84,14 @@ reviewed*); the v1/later tag says what gets **built first**, not what's omitted.
 | Context Renamed / Archived | **W9 Lane Manager** | later | housekeeping |
 | Business Fact Defined / Renamed / Fields Updated / Archived | **W5/6 Inspector** | v1 | + **W4** snap |
 | Business Fact Assigned / Context Cleared | **W5/6 Inspector** (Lane control) | v1 | |
-| External Business Fact: Defined / Renamed / Fields Updated / Archived | **W5/6** | v1 | yellow; lane auto-assigned |
+| External Business Fact: Defined / Renamed / Fields Updated / Archived | **W5/6** | v1 | yellow; lane assigned **explicitly** (O5), distinct rendering |
 | Command: Defined / Renamed / Fields Updated / Archived | **W5/6** + **W4** | v1 | command band |
 | Read Model: Defined / Renamed / Fields Updated / Archived | **W5/6** + **W4** | v1 | rides command band, stacks |
 | Wireframe: Defined / Renamed / **Content** Updated / Archived | **W5/6** (content editor) | v1 | trigger slot |
 | Automation: Defined / Renamed / **Reconfigured** / Archived | **W5/6** + **W4** | v1 | trigger slot; Reconfigured = trigger config (G3 resolved) |
 | Translation: Defined / Renamed / **Mapping Updated** / Archived | **W5/6** (mapping editor) | v1 | trigger slot; Mapping Updated (G3 resolved) |
-| Slice Created / Renamed / Archived | **W3** + **W4** | v1 | |
-| Entity Placed / Moved / Removed From Slice | **W4** (snap, not drag-to-xy) | v1 | placement = slot/order; Moved = reorder in slot/lane (F3) |
+| Slice Defined / Renamed / Archived | **W3** + **W4** | v1 | |
+| Entity Placed / Slots Swapped / Removed From Slice | **W4** (snap, not drag-to-xy) | v1 | placement = slotRole + slot#; reorder = slot swap (F3) |
 | Relation Drawn / Info Updated / Removed | **W7** | v1 | all kinds incl. translation |
 | Scenario (GWT) Defined / Updated / Archived | **W8** | v1 | bottom strip |
 | Scenario (GT) Defined / Updated / Archived | **W8** | v1 | no When |
@@ -132,7 +133,7 @@ new wireframe needed. Fact wiring only:
 
 - **Focus:** `[+ New Model]`.
 - **Data shown** (→ read model **`models`**, NEW): name, sliceCount *(derived: count of
-  `Slice Created` − `Slice Archived`)*, archived. (Dropped relative-time chrome — polish.)
+  `Slice Defined` − `Slice Archived`)*, archived. (Dropped relative-time chrome — polish.)
 - **Actions:** `[+ New Model]` → `CreateModel` (→ *Model Created*); `Rename` → `RenameModel`;
   `Archive` → `ArchiveModel`; `[Export]` → `ExportModel` — a **state-view query** that renders
   the current-state JSON (no recorded fact; O1) — the v1 save/round-trip path; `Publish`/`Import`
@@ -166,7 +167,7 @@ new wireframe needed. Fact wiring only:
   name, type, archived); tiled slices (→ **`slice_placements`** + `entity_catalog` +
   **`relations_graph`** = the existing `GET /slices/:id` join). Each box renders via **W4**.
 - **Actions:** palette `+ <Type>` → opens **W5/6** on a fresh entity; `+ add slice` →
-  `DefineSlice` (→ *Slice Created*); `[layers ▾]`/`[lanes ▢]` → presentation toggles (no
+  `DefineSlice` (→ *Slice Defined*); `[layers ▾]`/`[lanes ▢]` → presentation toggles (no
   fact); breadcrumb → scope/zoom (W10, later — v1 = flat tiled slices).
 - Reuse: the same entity reused across boxes is the same identity (ID-based) — no
   element-link concept needed. The mini-box hints the read model in the command band (`+[readM]`).
@@ -237,22 +238,25 @@ slots: TRIGGER(wireframe|automation|translation) → COMMAND band(command + read
 
 - **Focus:** the slot the slice is "about" (here, the command).
 - **Data shown** (→ **`slice_placements`** ⋈ **`entity_catalog`**): per placement
-  `{ entityId, name, entityType, slotRole, lane, order }`; relations among visible entities
+  `{ entityId, name, entityType, slotRole, lane, slot }`; relations among visible entities
   (→ **`relations_graph`**, kind stored); read-model fields (W5/6); auto-surfaced scenarios
   (→ **`scenarios`**, queried by the slice's entity GUIDs).
-- **Actions:** `+ <role>` → pick existing or create (W5/6) then **`PlaceEntity`** with an
-  **`order`** (slot computed from type; not x/y) (→ *Entity Placed*); drag to **reorder within
-  the slot/lane** → **`MoveEntity`** (→ *Entity Moved*) — you can't move across slots (slot is
-  fixed by type; a fact's lane changes only by re-assigning its Context); remove →
+- **Actions:** `+ <role>` → pick existing or create (W5/6) then **`PlaceEntity`** with a **`slot`**
+  number (band computed from type; not x/y; omitted for single-cardinality command/automation/
+  translation) (→ *Entity Placed*); to **reorder**, **`SwapEntitySlots`** between two placements in
+  the same band (→ *Entity Slots Swapped*) — you can't move across bands (band fixed by type; a
+  fact's lane changes only by re-assigning its Context); remove →
   **`RemoveEntityFromSlice`**; `[rename]` → `RenameSlice`; `[⋯]` → `ArchiveSlice`; draw arrow → **W7**.
 - **KEY FINDING #1 — placement shape must change.** Backend `EntityPlaced {x, y}` is freeform.
-  Snap slots mean placement = **`{ slotRole, order }`** — `slotRole` (trigger|command|readModel|
-  fact) is **computed from the entity's type**, and the **lane is derived** from the fact's
-  assigned Context (not stored on the placement → no drift). x/y becomes a derived layout-solver
-  output, never user-authored. (Resolved as **F3** in `em-commands-results.md`.)
-- Provisional: **within-lane arrangement** of multiple facts (vertical stack vs horizontal
-  run) is an open research item (`layout-and-rendering.md`) — example shows one fact per lane;
-  not settled.
+  Snap slots mean placement = **`{ slotRole, slot }`** — `slotRole` (trigger|command|readModel|
+  fact) is **computed from the entity's type**, `slot` is an **integer vertical index** (0=top), and
+  the **lane is derived** from the fact's assigned Context (not stored on the placement → no drift).
+  Command/automation/translation are single (no slot); wireframes/read-models/facts are multiple
+  (slot-numbered). x/y becomes a derived layout-solver output, never user-authored. (Resolved as
+  **F3** in `em-commands-results.md`.)
+- **Within-lane arrangement** of multiple facts = a **vertical stack ordered by slot number**
+  (resolved 2026-06-08, `layout-and-rendering.md`); reorder via slot swap. The one-fact-per-lane
+  example below is illustrative, not a limit.
 
 ---
 
@@ -285,7 +289,8 @@ Fields live *inside* the definition (brainstorm #1/#7). Business-fact example:
   then assign; `Clear` → `ClearBusinessFactContext`; `Archive` → `Archive<Type>`.
 - **Type variants:**
   - **Wireframe** → Fields replaced by a **content/layout editor** (→ *Wireframe Content Updated*).
-  - **External fact** → yellow; lane is **auto-assigned** (own lane), so no manual Lane control.
+  - **External fact** → yellow; **explicit Lane control** (same assign/clear path as internal facts,
+    O5), rendered distinctly (yellow / "external"). **Not** auto-assigned at define.
   - **Command / Read Model** → fields editor; **no** Lane control (lane-agnostic).
   - **Automation** → trigger-type (fact | timer | interaction) + monitored read-model ref +
     issued-command ref; edited via **`ReconfigureAutomation`** → *Automation Reconfigured*
@@ -340,13 +345,13 @@ Translation edge example (the reason kind is **stored**, not derived):
 │ THEN°   emit Budget Line Recorded { amount: €5 }            │
 │         » [ Save scenario ] «                               │
 └──────────────────────────────────────────────────────────────┘
-   GT variant: kind=GT, anchor = a read model, NO When:
+   GT variant: kind=GT, anchor = a read model or automation, NO When:
    GIVEN ordered facts → THEN read model shows {state}.
 ```
 
 - **Focus:** `[Save scenario]`.
 - **Data shown** (→ **`scenarios`** read model, NEW; + `entity_catalog` for pickers): kind,
-  anchor entity (command for GWT / read model for GT, **by GUID**), given facts[], when, then,
+  anchor entity (command for GWT / read model or automation for GT, **by GUID**), given facts[], when, then,
   out-of-sync flag.
 - **Actions:** `[Save]` → `DefineScenario {kind, anchorId, given, when?, then}` (→ *Scenario
   Defined*); edit → `UpdateScenario`; delete → `ArchiveScenario`.
@@ -428,7 +433,7 @@ Wireframed for fact coverage; built later.
 | Read model | Feeds | Status |
 |---|---|---|
 | `entity_catalog` | W3, W4, W5/6, W7, pickers; dup-name check | exists |
-| `slice_placements` | W3, W4 | exists — **change to slot/order; lane derived, not x/y** (F3) |
+| `slice_placements` | W3, W4 | exists — **change to slotRole + slot#; lane derived, not x/y** (F3) |
 | `relations_graph` | W4, W7 | exists |
 | `models` | W2, W3 scope, W11 | **NEW** (needs `model` aggregate) |
 | `contexts` | W9, W5/6 lane pickers | **NEW** |
@@ -441,7 +446,7 @@ Wireframed for fact coverage; built later.
 `lastPublished`. (W6's "used in N slices" was **cut** from v1.)
 
 **Commands** (its own State Changes): existing — `DefineBusinessFact/Command`, `Rename*`,
-`Archive*`, `DefineSlice`, `PlaceEntity`, `MoveEntity`, `RemoveEntityFromSlice`, `RenameSlice`,
+`Archive*`, `DefineSlice`, `PlaceEntity`, `SwapEntitySlots`, `RemoveEntityFromSlice`, `RenameSlice`,
 `ArchiveSlice`, `DrawRelation`, `RemoveRelation`. **New** — `CreateModel`/`RenameModel`/
 `ArchiveModel`/`ExportModel` (+ later `PublishModel`/`ImportModel`); `DefineReadModel`/
 `DefineWireframe`/`DefineAutomation`/`DefineTranslation`/`DefineExternalBusinessFact`;
@@ -455,8 +460,9 @@ one command per entity stream.)
 
 ## Flagged decisions / gaps (carry to Phase 3 / verify)
 
-1. **KEY FINDING #1 — placement = `{slotRole, order}`, not x/y** (slotRole computed from type;
-   lane derived from Context). Reshapes `EntityPlaced`/`EntityMoved`. **Resolved (F3).**
+1. **KEY FINDING #1 — placement = `{slotRole, slot#}`, not x/y** (slotRole computed from type;
+   `slot` integer 0=top; lane derived from Context). Reshapes `EntityPlaced`; reorder = `SwapEntitySlots`.
+   **Resolved (F3, refined by user 2026-06-08).**
 2. **KEY FINDING #2 — `model` aggregate missing.** Root container + `models` read model.
    **Resolved (F1/F2 in commands).**
 3. **G1 — resolved.** `publishes` targets an `externalBusinessFact` (yellow); `externalSystem`
@@ -466,10 +472,11 @@ one command per entity stream.)
 5. **D1 — read-model orientation on canvas.** Confirmed model: read model rides the command
    band but wires **up** to the trigger (`displayedBy`), fed from below by facts (`feeds`);
    the command wires **down** to facts (`produces`). Drives vue-flow arrow routing (a back-edge).
-6. **D2 — trigger slot: single or stackable?** One trigger per slice, or can a cross-context/
-   translation slice hold several? Affects the empty-slot affordance + W4 anatomy.
-7. **D3 — within-lane fact arrangement** (vertical stack vs horizontal run) — open research
-   (`layout-and-rendering.md`); W4 shows one fact/lane provisionally.
+6. **D2 — trigger slot: single or stackable? RESOLVED** (user 2026-06-08): **wireframes are
+   stackable** (multiple, slot-numbered); **automation / translation are single**. Command is single
+   too; read models + facts stack.
+7. **D3 — within-lane fact arrangement. RESOLVED** (user 2026-06-08): **vertical stack ordered by
+   slot number** (0=top); reorder via `SwapEntitySlots`. (`layout-and-rendering.md`)
 8. **Completion layer not fact-stormed.** W6's verified/implemented flags were **cut** from v1
    — the completion layer (`notes/layers.md`) has no business facts. If wanted later, model
    `Element Marked Verified/Implemented` + commands first.

@@ -48,7 +48,8 @@ Everything below is the **Modeling** context unless headed otherwise.
 5. **GWT/GT are independent entities that reference by GUID (#3).** A GWT is defined for a
    specific command, but the **command does not know about it** — the GWT holds the
    command's GUID internally (not a drawn relation). GWTs **auto-surface** wherever their
-   referenced command/read-model appears. GT (no When) references a read model the same way.
+   referenced command/read-model appears. GT (no When) references a read model **or automation**
+   the same way.
 6. **Relations carry a stored kind + an extensible meta bag (#5).** The relation **kind**
    is **stored, not purely derived** from the endpoint type-pair — the 4th pattern
    (Translation) makes some type-pairs ambiguous, so the discriminator hook goes in **now**.
@@ -70,7 +71,8 @@ Everything below is the **Modeling** context unless headed otherwise.
   decider, command handler, api, and projection instead of two near-identical verticals.
   The kind-dependent parts — `when` (command ref) exists only for GWT, and the `then`
   shape differs — are field-level variations the decider handles per kind. Both reference
-  their anchor (command / read model) by GUID and both auto-surface. (Reversible — split
+  their anchor (command for GWT / read model or automation for GT) by GUID and both
+  auto-surface. (Reversible — split
   into two verticals later if the kinds diverge enough to warrant it.)
 - **C. Element-link & backlink dropped as separate concepts** (confirmed): ID-based
   identity makes "same element" automatic (no manual link), and a backlink (later fact →
@@ -84,9 +86,11 @@ Later phases changed some specifics; this file is updated to match. Canonical de
 
 - **F1** — every entity belongs to a `model`; `modelId` is on every command/fact; names are
   unique **per model** (not globally). The `model` root aggregate is real (it was missing).
-- **F3** — placement is `{ slotRole, order }`, not x/y. `slotRole` is **computed from the
-  entity type**; the **lane is derived** from the fact's assigned Context (not stored on the
-  placement). "Moved" = reorder within a slot/lane only.
+- **F3** — placement is `{ slotRole, slot }`, not x/y. `slotRole` is **computed from the
+  entity type**; `slot` is an integer vertical index (0=top); the **lane is derived** from the
+  fact's assigned Context (not stored on the placement). Command/automation/translation are single
+  (no slot); wireframes/read-models/facts are multiple (slot-numbered). Reorder = **slot swap**
+  between two placements (`SwapEntitySlots`), refined by the user 2026-06-08.
 - **G1** — the outbound boundary is an **external business fact**, not an `externalSystem` node
   (removed). Pair table corrected below.
 - **G3** — automation + translation gain an edit fact (Automation Reconfigured / Translation
@@ -95,6 +99,9 @@ Later phases changed some specifics; this file is updated to match. Canonical de
   below and replaced by the resolved Publishing/Sync facts.
 - **F4/F5/F6** (read-model/event detail) — relation kind+meta stored (already reflected);
   `entity_catalog` carries each entity's definition; `scenarios` indexed by anchor GUID.
+- **O4** (user, 2026-06-08) — entity field **types are free-form text**, not a fixed enum (ES simplicity).
+- **O5** (user, 2026-06-08) — external business facts are assigned a lane **explicitly** (same path as
+  internal facts), rendered distinctly; not auto-assigned at define.
 
 ---
 
@@ -108,15 +115,15 @@ row drop.
 | Entity | Color / role | Extra |
 |---|---|---|
 | businessFact | orange (internal) | + context assign/clear |
-| externalBusinessFact | yellow (integration) | own lane |
+| externalBusinessFact | yellow (integration) | own lane — assigned explicitly (O5) |
 | command | blue | |
 | readModel | green | |
 | wireframe | sketch | payload = content/layout |
 | automation | gear | + reconfigure (G3) |
 | translation | — (4th pattern) | + mapping update (G3) |
 | context | lane / swimlane | own ID; only facts assign to it |
-| scenario | rule (GWT \| GT) | refs command/readModel by GUID |
-| slice | container | references entities; placements = slot/order (F3) |
+| scenario | rule (GWT \| GT) | refs command (GWT) / readModel\|automation (GT) by GUID |
+| slice | container | references entities; placements = slotRole + slot# (F3) |
 | group | configurable hierarchy | level scheme per model |
 | relation | edge | {from, to, kind, meta} |
 | model | root container | every entity carries its `modelId` (F1) |
@@ -160,7 +167,8 @@ row drop.
 
 ### External business fact (yellow, #6)
 - **External Business Fact Defined** — data arriving from or published to another system; a
-  tech-agnostic integration record. Gets its own lane.
+  tech-agnostic integration record. Gets its own lane, assigned **explicitly** (same path as
+  internal facts; rendered distinctly — O5).
 - **External Business Fact Renamed / Fields Updated / Archived** — as for business facts.
 
 ### Command (blue)
@@ -194,12 +202,15 @@ row drop.
   has no generic *Fields Updated*).
 
 ### Slice (container)
-- **Slice Created** — the smallest functional unit: a bucket that references entities and
+- **Slice Defined** — the smallest functional unit: a bucket that references entities and
   records where they sit. Holds no entity definitions.
-- **Entity Placed** — an entity reference is dropped into its slice **slot** (the slot is fixed
-  by the entity's type) at an `order` within that slot/lane. No free x/y (F3).
-- **Entity Moved** — a placement is **reordered** within its slot/lane (you can't move across
-  slots; a fact's lane changes only by re-assigning its Context) (F3).
+- **Entity Placed** — an entity reference is dropped into its **role band** (the band is fixed by
+  the entity's type) at a **`slot`** number (integer vertical index, 0=top) within that band. No
+  free x/y (F3). Command/automation/translation are single (no slot); wireframes/read-models/facts
+  are multiple, slot-numbered.
+- **Entity Slots Swapped** — two placements in the same band **exchange slot numbers** — the single
+  graph-reorder primitive. You can't move across bands (band fixed by type; a fact's lane changes
+  only by re-assigning its Context) (F3).
 - **Entity Removed From Slice** — a placement is removed (the entity itself is untouched).
 - **Slice Renamed / Archived** — standard lifecycle.
 
@@ -216,8 +227,9 @@ row drop.
   inside the scenario (the command is unaware). **Given** = precondition facts (existence
   and optional values); **Then** = emitted fact(s), a rejection, or an error fact. Uses
   concrete example data. Auto-surfaces wherever its command appears.
-- **GT Defined** — a Given/Then rule (no When), a read-model projection spec referencing a
-  read model by GUID. Given ordered facts → Then the read model shows a specific state.
+- **GT Defined** — a Given/Then rule (no When), a projection spec referencing a **read model
+  or automation** by GUID (both take G/T — no command, so no When). Given ordered facts → Then
+  the read model / automation shows a specific state.
 - **Scenario Updated** — the rule's content changed.
 - **Scenario Archived** — the rule is removed (the tool may prompt this on relation removal;
   scenarios are second-class and can be flagged out-of-sync — see `notes/gwt.md`).
@@ -269,10 +281,10 @@ Reads as *how a model gets built* — itself the Event Modeling process (recursi
 3. **Business Facts Defined** — the brainstorm dump; fields via Fields Updated; lane-less
 4. **Contexts Defined** → **Facts Assigned To Context** — later, once streams are known
 5. **External Business Facts Defined**
-6. **Slice Created**
+6. **Slice Defined**
 7. **Wireframe / Read Model / Command Defined** — with fields/content; backwards thinking
 8. **Automation / Translation Defined**
-9. **Entities Placed** → **Moved**
+9. **Entities Placed** → **Slots Swapped** (reorder)
 10. **Relations Drawn** (kind + meta; cycle + translation edges) → **Info Updated** / **Removed**
 11. **GWT / GT Defined** — referenced by GUID; auto-surface
 12. **Groups Created** → **Slices Assigned** → **Groups Nested**
