@@ -234,4 +234,34 @@ describe('evolveCatalog', () => {
     );
     expect(doc?.name).toBe('');
   });
+
+  it('stamps definedAtPosition from metadata.globalPosition as a Number (BigInt-safe)', () => {
+    const withMeta = {
+      type: 'BusinessFactDefined',
+      data: { modelId: M, entityId: 'f9', name: 'X', fields: [] },
+      metadata: { globalPosition: 42n },
+    } as unknown as ReadEvent<CatalogEvent>;
+    const doc = evolveCatalog(null, withMeta);
+    expect(doc?.definedAtPosition).toBe(42);
+    // BigInt must never leak into the doc — Pongo's JSON write would throw.
+    expect(typeof doc?.definedAtPosition).toBe('number');
+  });
+
+  it('stamps definedAtPosition on SliceDefined too (drives W3 tiling order)', () => {
+    const withMeta = {
+      type: 'SliceDefined',
+      data: { modelId: M, sliceId: 's9', name: 'S' },
+      metadata: { globalPosition: 7n },
+    } as unknown as ReadEvent<CatalogEvent>;
+    const doc = evolveCatalog(null, withMeta);
+    expect(doc?.definedAtPosition).toBe(7);
+  });
+
+  it('leaves definedAtPosition undefined when metadata is absent', () => {
+    const doc = evolveCatalog(
+      null,
+      ev({ type: 'CommandDefined', data: { modelId: M, entityId: 'c9', name: 'C', fields: [] } }),
+    );
+    expect(doc?.definedAtPosition).toBeUndefined();
+  });
 });

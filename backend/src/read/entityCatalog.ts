@@ -52,6 +52,13 @@ export type CatalogEntry = {
    * lane-agnostic types. May dangle on an archived context (render falls back).
    */
   contextId?: string;
+  /**
+   * Global event-log position of the `*Defined` event — the model-wide creation
+   * order the list endpoints sort by (palette order, W3 slice tiling). Optional:
+   * docs folded before this field existed lack it (sorted last, `_id` tiebreak);
+   * rebuildable projections backfill it.
+   */
+  definedAtPosition?: number;
   archived: boolean;
 };
 
@@ -68,6 +75,18 @@ export type CatalogEvent =
   | SliceRenamed
   | SliceArchived;
 
+/**
+ * Global position of a read event, as a JSON-safe number. The async consumer
+ * always supplies `metadata.globalPosition` (a BigInt — MUST be converted;
+ * `JSON.stringify` of a BigInt throws when Pongo writes the doc). Unit-test
+ * events may omit metadata → undefined.
+ */
+const definedAt = (event: ReadEvent<CatalogEvent>): number | undefined => {
+  const gp = (event.metadata as { globalPosition?: bigint | number } | undefined)
+    ?.globalPosition;
+  return gp === undefined ? undefined : Number(gp);
+};
+
 /** Pure fold — exported for unit testing without a database. */
 export const evolveCatalog = (
   document: CatalogEntry | null,
@@ -82,6 +101,7 @@ export const evolveCatalog = (
         entityType: 'businessFact',
         name,
         definition: { fields },
+        definedAtPosition: definedAt(event),
         archived: false,
       };
     }
@@ -103,6 +123,7 @@ export const evolveCatalog = (
         entityType: 'command',
         name,
         definition: { fields },
+        definedAtPosition: definedAt(event),
         archived: false,
       };
     }
@@ -120,6 +141,7 @@ export const evolveCatalog = (
         entityType: 'readModel',
         name,
         definition: { fields },
+        definedAtPosition: definedAt(event),
         archived: false,
       };
     }
@@ -137,6 +159,7 @@ export const evolveCatalog = (
         entityType: 'wireframe',
         name,
         definition: { content },
+        definedAtPosition: definedAt(event),
         archived: false,
       };
     }
@@ -154,6 +177,7 @@ export const evolveCatalog = (
         entityType: 'externalBusinessFact',
         name,
         definition: { fields },
+        definedAtPosition: definedAt(event),
         archived: false,
       };
     }
@@ -175,6 +199,7 @@ export const evolveCatalog = (
         entityType: 'automation',
         name,
         definition: { triggerConfig },
+        definedAtPosition: definedAt(event),
         archived: false,
       };
     }
@@ -194,6 +219,7 @@ export const evolveCatalog = (
         entityType: 'translation',
         name,
         definition: { mapping },
+        definedAtPosition: definedAt(event),
         archived: false,
       };
     }
@@ -209,6 +235,7 @@ export const evolveCatalog = (
         modelId: event.data.modelId,
         entityType: 'slice',
         name: event.data.name ?? '',
+        definedAtPosition: definedAt(event),
         archived: false,
       };
     case 'SliceRenamed':

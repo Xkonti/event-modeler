@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { AppEventStore } from '../../eventStore.ts';
 import { documents } from '../../db.ts';
 import type { ModelDoc } from '../../read/models.ts';
+import type { CatalogEntry } from '../../read/entityCatalog.ts';
 import { decide, type ModelCommand } from './model.ts';
 import { handleModel } from './commandHandler.ts';
 import type { Auth } from '../../auth/auth.ts';
@@ -94,4 +95,55 @@ export const modelApi =
       const { _id, name, archived, sliceCount } = doc;
       res.status(200).json({ _id, name, archived, sliceCount });
     });
+
+    // Creation order for the catalog lists: definedAtPosition (global log
+    // position of the *Defined event), missing-last (pre-field docs), `_id`
+    // tiebreak. Pongo `find` has no sort option — the model-sized result is
+    // sorted in JS.
+    const byDefinedAt = (a: CatalogEntry, b: CatalogEntry): number =>
+      (a.definedAtPosition ?? Number.MAX_SAFE_INTEGER) -
+        (b.definedAtPosition ?? Number.MAX_SAFE_INTEGER) ||
+      a._id.localeCompare(b._id);
+
+    // The model's entity catalog — feeds the W3 palette, every entity picker,
+    // and the client-side dup-name lookup. Slices are cataloged too but are NOT
+    // entities (they list via /models/:id/slices below).
+    router.get(
+      '/models/:id/entities',
+      async (req: Request, res: Response): Promise<void> => {
+        const entries = await documents
+          .collection<CatalogEntry>('entity_catalog')
+          .find({ modelId: req.params.id, archived: false });
+        const dto = entries
+          .filter((e) => e.entityType !== 'slice')
+          .sort(byDefinedAt)
+          .map(({ _id, entityType, name, contextId, definedAtPosition }) => ({
+            _id,
+            entityType,
+            name,
+            contextId,
+            definedAtPosition,
+          }));
+        res.status(200).json(dto);
+      },
+    );
+
+    // The model's slices in creation order — the W3 canvas tiles boxes
+    // left→right in exactly this order (decided 2026-06-09: creation order).
+    router.get(
+      '/models/:id/slices',
+      async (req: Request, res: Response): Promise<void> => {
+        const entries = await documents
+          .collection<CatalogEntry>('entity_catalog')
+          .find({
+            modelId: req.params.id,
+            entityType: 'slice',
+            archived: false,
+          });
+        const dto = entries
+          .sort(byDefinedAt)
+          .map(({ _id, name }) => ({ _id, name }));
+        res.status(200).json(dto);
+      },
+    );
   };

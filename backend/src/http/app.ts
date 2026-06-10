@@ -16,6 +16,7 @@ import { automationApi } from '../domain/automation/api.ts';
 import { translationApi } from '../domain/translation/api.ts';
 import { scenarioApi } from '../domain/scenario/api.ts';
 import { analysisApi } from './analysisApi.ts';
+import { exportApi } from './exportApi.ts';
 
 export type BuildAuthAppDeps = {
   auth: Auth;
@@ -75,6 +76,7 @@ export const buildAuthApp = ({
     translationApi(eventStore, auth),
     scenarioApi(eventStore, auth),
     analysisApi(),
+    exportApi(),
   ];
   const apiRouter = Router();
   for (const setup of apis) setup(apiRouter);
