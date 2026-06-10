@@ -8,11 +8,10 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
-    "migrate": "bun run src/migrations/constraints.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test src",
-    "test:integration": "node --test 'test/integration/*.test.ts'",
-    "test:integration:auth": "node --test 'test/integration/auth-*.test.ts'",
+    "test:integration": "node --test --test-concurrency=4 'test/integration/*.test.ts'",
+    "test:integration:auth": "node --test --test-concurrency=4 'test/integration/auth-*.test.ts'",
     "test:all": "bun run test && bun run test:integration",
     "db:up": "docker compose --env-file .env -p event-modeler up -d",
     "db:down": "docker compose --env-file .env -p event-modeler down"

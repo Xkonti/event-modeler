@@ -8,7 +8,7 @@
  * Plain `pg` (not Bun-specific) so it runs under both Bun and Node — the latter
  * for testcontainers integration. Each
  * fn opens + closes its own short-lived client, taking a connection string like
- * the migrations module; an optional already-connected client lets the adapter
+ * the schema module; an optional already-connected client lets the adapter
  * run a put inside a wider unit of work.
  */
 import pg from 'pg';

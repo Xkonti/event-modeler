@@ -1,0 +1,5 @@
+# Bare `bun test` must NOT pick up test/integration/* — those run under
+# `node --test` (testcontainers' lifecycle probe hangs under Bun, and Bun's 5s
+# hook timeout kills container startup). Scope bun's test discovery to src/.
+[test]
+root = "src"

@@ -38,10 +38,14 @@ export const commandApi =
     };
 
     router.post('/commands', guard, (req: Request, res: Response) => {
-      const { entityId, name, context } = req.body;
+      const { modelId, entityId, name, fields } = req.body ?? {};
+      if (typeof modelId !== 'string' || modelId.length === 0)
+        return void res.status(400).json({ ok: false, error: 'modelId required' });
+      if (typeof entityId !== 'string' || entityId.length === 0)
+        return void res.status(400).json({ ok: false, error: 'entityId required' });
       void run(res, entityId, {
         type: 'DefineCommand',
-        data: { entityId, name, context },
+        data: { modelId, entityId, name, fields: Array.isArray(fields) ? fields : [] },
       });
     });
 
@@ -51,6 +55,16 @@ export const commandApi =
       void run(res, entityId, {
         type: 'RenameCommand',
         data: { entityId, name: req.body.name },
+      });
+    });
+
+    router.put('/commands/:id/fields', guard, (req: Request, res: Response) => {
+      const entityId = req.params.id;
+      if (!entityId) return void res.status(400).json({ error: 'missing id' });
+      const { fields } = req.body ?? {};
+      void run(res, entityId, {
+        type: 'UpdateCommandFields',
+        data: { entityId, fields: Array.isArray(fields) ? fields : [] },
       });
     });
 
@@ -73,8 +87,8 @@ export const commandApi =
           res.status(404).json({ ok: false, error: 'not found' });
           return;
         }
-        const { _id, entityType, name, context, archived } = doc;
-        res.status(200).json({ _id, entityType, name, context, archived });
+        const { _id, modelId, entityType, name, definition, archived } = doc;
+        res.status(200).json({ _id, modelId, entityType, name, definition, archived });
       },
     );
   };

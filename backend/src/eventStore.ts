@@ -2,6 +2,8 @@ import { projections } from '@event-driven-io/emmett';
 import { getPostgreSQLEventStore } from '@event-driven-io/emmett-postgresql';
 import { connectionString } from './config.ts';
 import { entityNamesConstraint } from './constraints/entityNames.ts';
+import { contextNamesConstraint } from './constraints/contextNames.ts';
+import { relationPairsConstraint } from './constraints/relationPairs.ts';
 import { authUserEmailIndex } from './constraints/authUserEmailIndex.ts';
 import { authAccountIndex } from './constraints/authAccountIndex.ts';
 
@@ -19,6 +21,8 @@ export const createEventStore = (connectionStr: string) =>
     schema: { autoMigration: 'CreateOrUpdate' },
     projections: projections.inline([
       entityNamesConstraint,
+      contextNamesConstraint,
+      relationPairsConstraint,
       authUserEmailIndex,
       authAccountIndex,
     ]),

@@ -12,7 +12,7 @@ import type { AccountEvent } from '../domain/account/events.ts';
  * ids ONLY (no PII/secret). UNIQUE (provider_id, provider_account_id) blocks a
  * duplicate account link — the INSERT throws → append rolls back.
  *
- * Table created by src/migrations/constraints.ts.
+ * Table created by src/schema.ts.
  */
 export const authAccountIndex = postgreSQLRawBatchSQLProjection<AccountEvent>({
   name: 'auth_account_index_constraint',

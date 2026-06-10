@@ -7,7 +7,15 @@ import { modelApi } from '../domain/model/api.ts';
 import { businessFactApi } from '../domain/businessFact/api.ts';
 import { sliceApi } from '../domain/slice/api.ts';
 import { commandApi } from '../domain/command/api.ts';
+import { readModelApi } from '../domain/readModel/api.ts';
+import { wireframeApi } from '../domain/wireframe/api.ts';
+import { externalBusinessFactApi } from '../domain/externalBusinessFact/api.ts';
 import { relationApi } from '../domain/relation/api.ts';
+import { contextApi } from '../domain/context/api.ts';
+import { automationApi } from '../domain/automation/api.ts';
+import { translationApi } from '../domain/translation/api.ts';
+import { scenarioApi } from '../domain/scenario/api.ts';
+import { analysisApi } from './analysisApi.ts';
 
 export type BuildAuthAppDeps = {
   auth: Auth;
@@ -58,7 +66,15 @@ export const buildAuthApp = ({
     businessFactApi(eventStore, auth),
     sliceApi(eventStore, auth),
     commandApi(eventStore, auth),
+    readModelApi(eventStore, auth),
+    wireframeApi(eventStore, auth),
+    externalBusinessFactApi(eventStore, auth),
     relationApi(eventStore, auth),
+    contextApi(eventStore, auth),
+    automationApi(eventStore, auth),
+    translationApi(eventStore, auth),
+    scenarioApi(eventStore, auth),
+    analysisApi(),
   ];
   const apiRouter = Router();
   for (const setup of apis) setup(apiRouter);

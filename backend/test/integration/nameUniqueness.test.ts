@@ -5,38 +5,52 @@ import {
   type StartedPostgreSqlContainer,
 } from '@testcontainers/postgresql';
 import { createEventStore, type AppEventStore } from '../../src/eventStore.ts';
-import { migrateConstraints } from '../../src/migrations/constraints.ts';
+import { createSchema } from '../../src/schema.ts';
 import { handleBusinessFact } from '../../src/domain/businessFact/commandHandler.ts';
 import { decide } from '../../src/domain/businessFact/businessFact.ts';
+import { handleCommand } from '../../src/domain/command/commandHandler.ts';
+import { decide as decideCommand } from '../../src/domain/command/command.ts';
 
 /**
  * Integration test against a REAL Postgres (testcontainers). Proves the inline
- * `entity_names` constraint enforces global name uniqueness end-to-end: the
- * append rolls back on a duplicate, and the name frees on archive.
+ * `entity_names` constraint enforces PER-MODEL name uniqueness across types (F1b)
+ * end-to-end: a name collides within a model (fact vs fact AND fact vs command),
+ * is free across different models, and frees on archive.
  *
- * Runs under Node (`node --test`) — testcontainers' container lifecycle is not
- * reliable under the Bun runtime. Requires Docker. See README → Testing.
+ * Runs under Node (`node --test`) — testcontainers' lifecycle is unreliable under
+ * Bun. Requires Docker. See README → Testing.
  */
 let container: StartedPostgreSqlContainer;
 let eventStore: AppEventStore;
 
-const define = (id: string, name: string, context = 'Budgeting') =>
+const defineFact = (modelId: string, id: string, name: string) =>
   handleBusinessFact(eventStore, id, (state) =>
-    decide({ type: 'DefineBusinessFact', data: { entityId: id, name, context } }, state),
+    decide(
+      { type: 'DefineBusinessFact', data: { modelId, entityId: id, name, fields: [] } },
+      state,
+    ),
   );
 
-const archive = (id: string) =>
+const archiveFact = (id: string) =>
   handleBusinessFact(eventStore, id, (state) =>
     decide({ type: 'ArchiveBusinessFact', data: { entityId: id } }, state),
   );
 
-describe('global name uniqueness (inline constraint)', () => {
+const defineCommand = (modelId: string, id: string, name: string) =>
+  handleCommand(eventStore, id, (state) =>
+    decideCommand(
+      { type: 'DefineCommand', data: { modelId, entityId: id, name, fields: [] } },
+      state,
+    ),
+  );
+
+describe('per-model name uniqueness across types (inline constraint, F1b)', () => {
   before(async () => {
     container = await new PostgreSqlContainer('postgres:16-alpine').start();
     const connectionString = container.getConnectionUri();
     eventStore = createEventStore(connectionString);
     await eventStore.schema.migrate();
-    await migrateConstraints(connectionString);
+    await createSchema(connectionString);
   });
 
   after(async () => {
@@ -44,24 +58,33 @@ describe('global name uniqueness (inline constraint)', () => {
     await container?.stop();
   });
 
-  it('accepts the first fact to claim a name', async () => {
-    const result = await define('f1', 'BudgetYearDefined');
+  it('accepts the first fact to claim a name in a model', async () => {
+    const result = await defineFact('m-A', 'f1', 'BudgetYearDefined');
     assert.equal(result.newEvents.length, 1);
   });
 
-  it('rejects a different entity reusing the same normalized name', async () => {
-    // Same name, different case — must collide on the normalized key.
-    await assert.rejects(() => define('f2', 'budgetyeardefined'));
+  it('rejects a different fact reusing the same normalized name in the SAME model', async () => {
+    // Same name, different case — collides on the normalized key within m-A.
+    await assert.rejects(() => defineFact('m-A', 'f2', 'budgetyeardefined'));
   });
 
-  it('allows an unrelated distinct name', async () => {
-    const result = await define('f2', 'BudgetLineRecorded');
+  it('ALLOWS the same name in a DIFFERENT model (per-model namespace)', async () => {
+    const result = await defineFact('m-B', 'f3', 'BudgetYearDefined');
     assert.equal(result.newEvents.length, 1);
   });
 
-  it('frees the name on archive, allowing reuse by another entity', async () => {
-    await archive('f1');
-    const result = await define('f3', 'BudgetYearDefined');
+  it('rejects a COMMAND sharing a fact name in the SAME model (cross-type)', async () => {
+    await assert.rejects(() => defineCommand('m-A', 'c1', 'BudgetYearDefined'));
+  });
+
+  it('allows that same name as a command in a different (empty) model', async () => {
+    const result = await defineCommand('m-C', 'c2', 'BudgetYearDefined');
+    assert.equal(result.newEvents.length, 1);
+  });
+
+  it('frees the name on archive, allowing reuse within the same model', async () => {
+    await archiveFact('f1'); // frees (m-A, budgetyeardefined)
+    const result = await defineFact('m-A', 'f4', 'BudgetYearDefined');
     assert.equal(result.newEvents.length, 1);
   });
 });

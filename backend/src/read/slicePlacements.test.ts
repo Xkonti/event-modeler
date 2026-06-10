@@ -6,24 +6,28 @@ import { evolveSlicePlacements, type SlicePlacementsDoc } from './slicePlacement
 /** Pure fold test — metadata is irrelevant, so cast minimal event shapes. */
 const ev = (e: SliceEvent): ReadEvent<SliceEvent> => e as ReadEvent<SliceEvent>;
 
+const M = 'm-budget';
+
 describe('evolveSlicePlacements', () => {
-  it('creates an empty doc on SliceDefined', () => {
+  it('creates an empty doc on SliceDefined (with modelId)', () => {
     const doc = evolveSlicePlacements(
       null,
-      ev({ type: 'SliceDefined', data: { entityId: 's1', name: 'Checkout' } }),
+      ev({ type: 'SliceDefined', data: { modelId: M, sliceId: 's1', name: 'Checkout' } }),
     );
     expect(doc).toEqual({
       _id: 's1',
+      modelId: M,
       name: 'Checkout',
       placements: [],
       archived: false,
     });
   });
 
-  it('appends a placement on EntityPlaced', () => {
+  it('appends a snap-slot placement on EntityPlaced (F3)', () => {
     const base: SlicePlacementsDoc = {
       _id: 's1',
-      name: 'C',
+      modelId: M,
+      name: 'Checkout',
       placements: [],
       archived: false,
     };
@@ -31,54 +35,78 @@ describe('evolveSlicePlacements', () => {
       base,
       ev({
         type: 'EntityPlaced',
-        data: { entityId: 's1', placedEntityId: 'e1', x: 10, y: 20 },
+        data: {
+          modelId: M,
+          sliceId: 's1',
+          placedEntityId: 'f1',
+          entityType: 'businessFact',
+          slotRole: 'fact',
+          slot: 0,
+        },
       }),
     );
-    expect(doc?.placements).toEqual([{ placedEntityId: 'e1', x: 10, y: 20 }]);
+    expect(doc?.placements).toEqual([
+      { placedEntityId: 'f1', entityType: 'businessFact', slotRole: 'fact', slot: 0 },
+    ]);
   });
 
-  it('updates coords on EntityMoved', () => {
+  it('swaps slot numbers on EntitySlotsSwapped', () => {
     const base: SlicePlacementsDoc = {
       _id: 's1',
-      placements: [{ placedEntityId: 'e1', x: 1, y: 1 }],
+      modelId: M,
+      placements: [
+        { placedEntityId: 'f1', entityType: 'businessFact', slotRole: 'fact', slot: 0 },
+        { placedEntityId: 'f2', entityType: 'businessFact', slotRole: 'fact', slot: 1 },
+      ],
       archived: false,
     };
     const doc = evolveSlicePlacements(
       base,
       ev({
-        type: 'EntityMoved',
-        data: { entityId: 's1', placedEntityId: 'e1', x: 9, y: 9 },
+        type: 'EntitySlotsSwapped',
+        data: { modelId: M, sliceId: 's1', entityIdA: 'f1', entityIdB: 'f2' },
       }),
     );
-    expect(doc?.placements).toEqual([{ placedEntityId: 'e1', x: 9, y: 9 }]);
+    expect(doc?.placements.find((p) => p.placedEntityId === 'f1')?.slot).toBe(1);
+    expect(doc?.placements.find((p) => p.placedEntityId === 'f2')?.slot).toBe(0);
   });
 
-  it('drops a placement on EntityRemovedFromSlice', () => {
+  it('drops the placement on EntityRemovedFromSlice', () => {
     const base: SlicePlacementsDoc = {
       _id: 's1',
-      placements: [{ placedEntityId: 'e1', x: 1, y: 1 }],
+      modelId: M,
+      placements: [
+        { placedEntityId: 'f1', entityType: 'businessFact', slotRole: 'fact', slot: 0 },
+      ],
       archived: false,
     };
     const doc = evolveSlicePlacements(
       base,
       ev({
         type: 'EntityRemovedFromSlice',
-        data: { entityId: 's1', placedEntityId: 'e1' },
+        data: { modelId: M, sliceId: 's1', placedEntityId: 'f1' },
       }),
     );
     expect(doc?.placements).toEqual([]);
   });
 
-  it('marks archived on SliceArchived', () => {
+  it('renames and archives', () => {
     const base: SlicePlacementsDoc = {
       _id: 's1',
+      modelId: M,
+      name: 'Old',
       placements: [],
       archived: false,
     };
-    const doc = evolveSlicePlacements(
+    const renamed = evolveSlicePlacements(
       base,
-      ev({ type: 'SliceArchived', data: { entityId: 's1' } }),
+      ev({ type: 'SliceRenamed', data: { modelId: M, sliceId: 's1', name: 'New' } }),
     );
-    expect(doc?.archived).toBe(true);
+    expect(renamed?.name).toBe('New');
+    const archived = evolveSlicePlacements(
+      renamed,
+      ev({ type: 'SliceArchived', data: { modelId: M, sliceId: 's1' } }),
+    );
+    expect(archived?.archived).toBe(true);
   });
 });

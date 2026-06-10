@@ -1,40 +1,63 @@
 import type { Event } from '@event-driven-io/emmett';
+import type { EntityType } from '../../shared/streams.ts';
+import type { SlotRole } from '../../shared/slotRoles.ts';
 
 /**
- * Slice entity events. One stream per slice: `slice-{entityId}`. A slice is a
+ * Slice entity events. One stream per slice: `slice-{sliceId}`. A slice is a
  * container that REFERENCES entities and records WHERE they sit (placements) —
- * it never holds entity definitions (those live in their own streams). Placement
- * position is presentation-only; structured snap layout is a frontend concern
- * (notes/model-structure.md, notes/layout-and-rendering.md).
+ * it never holds entity definitions (those live in their own streams). Every
+ * event carries `modelId` (F1).
  *
- * Placement uniqueness `(slice, placedEntity)` is a single-stream invariant — the
- * slice stream sees all its own placements — so it needs no inline constraint.
+ * Placement is the snap-slot model (F3): `slotRole` is the band computed from
+ * the entity's type, `slot` orders multi-cardinality bands (omitted for
+ * command/automation/translation — one each per slice). The LANE is NOT here —
+ * it derives from the catalog's `contextId` at render time. `entityType` is
+ * recorded so cardinality folds from the stream alone on replay.
+ *
+ * Placement uniqueness `(slice, placedEntity)` is a single-stream invariant —
+ * the slice stream sees all its own placements — so it needs no inline constraint.
  */
-export type SliceDefined = Event<'SliceDefined', { entityId: string; name?: string }>;
+export type SliceDefined = Event<
+  'SliceDefined',
+  { modelId: string; sliceId: string; name?: string }
+>;
 
 export type EntityPlaced = Event<
   'EntityPlaced',
-  { entityId: string; placedEntityId: string; x: number; y: number }
+  {
+    modelId: string;
+    sliceId: string;
+    placedEntityId: string;
+    entityType: EntityType;
+    slotRole: SlotRole;
+    slot?: number;
+  }
 >;
 
-export type EntityMoved = Event<
-  'EntityMoved',
-  { entityId: string; placedEntityId: string; x: number; y: number }
+export type EntitySlotsSwapped = Event<
+  'EntitySlotsSwapped',
+  { modelId: string; sliceId: string; entityIdA: string; entityIdB: string }
 >;
 
 export type EntityRemovedFromSlice = Event<
   'EntityRemovedFromSlice',
-  { entityId: string; placedEntityId: string }
+  { modelId: string; sliceId: string; placedEntityId: string }
 >;
 
-export type SliceRenamed = Event<'SliceRenamed', { entityId: string; name: string }>;
+export type SliceRenamed = Event<
+  'SliceRenamed',
+  { modelId: string; sliceId: string; name: string }
+>;
 
-export type SliceArchived = Event<'SliceArchived', { entityId: string }>;
+export type SliceArchived = Event<
+  'SliceArchived',
+  { modelId: string; sliceId: string }
+>;
 
 export type SliceEvent =
   | SliceDefined
   | EntityPlaced
-  | EntityMoved
+  | EntitySlotsSwapped
   | EntityRemovedFromSlice
   | SliceRenamed
   | SliceArchived;

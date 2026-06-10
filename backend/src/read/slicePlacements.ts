@@ -1,20 +1,29 @@
 import { pongoMultiStreamProjection } from '@event-driven-io/emmett-postgresql';
 import type { ReadEvent } from '@event-driven-io/emmett';
 import type { SliceEvent } from '../domain/slice/events.ts';
+import type { EntityType } from '../shared/streams.ts';
+import type { SlotRole } from '../shared/slotRoles.ts';
 
 /**
  * READ MODEL (not a constraint) — one document per slice holding its placement
- * list, built ASYNC from the global log (src/consumers.ts). The canvas GET joins
- * this with `entity_catalog` to resolve each placed entity's name/type.
+ * list in the snap-slot shape (F3), built ASYNC from the global log
+ * (src/consumers.ts). The canvas GET joins this with `entity_catalog` to resolve
+ * each placed entity's name/type/definition and lane (`contextId`).
  *
- * Positions are presentation-only; this read model never gates a write (the
- * slice decider owns placement invariants from its own stream), so it is a read
- * model by definition. See notes/constraint-inline-projection-pattern.md.
+ * Slots never gate a write (the slice decider owns placement invariants from its
+ * own stream), so this is a read model by definition. See
+ * notes/constraint-inline-projection-pattern.md.
  */
-export type SlicePlacement = { placedEntityId: string; x: number; y: number };
+export type SlicePlacement = {
+  placedEntityId: string;
+  entityType: EntityType;
+  slotRole: SlotRole;
+  slot?: number;
+};
 
 export type SlicePlacementsDoc = {
   _id: string;
+  modelId: string;
   name?: string;
   placements: SlicePlacement[];
   archived: boolean;
@@ -28,7 +37,8 @@ export const evolveSlicePlacements = (
   switch (event.type) {
     case 'SliceDefined':
       return {
-        _id: event.data.entityId,
+        _id: event.data.sliceId,
+        modelId: event.data.modelId,
         name: event.data.name,
         placements: [],
         archived: false,
@@ -41,23 +51,31 @@ export const evolveSlicePlacements = (
               ...document.placements,
               {
                 placedEntityId: event.data.placedEntityId,
-                x: event.data.x,
-                y: event.data.y,
+                entityType: event.data.entityType,
+                slotRole: event.data.slotRole,
+                slot: event.data.slot,
               },
             ],
           }
         : null;
-    case 'EntityMoved':
-      return document
-        ? {
-            ...document,
-            placements: document.placements.map((p) =>
-              p.placedEntityId === event.data.placedEntityId
-                ? { ...p, x: event.data.x, y: event.data.y }
-                : p,
-            ),
-          }
-        : null;
+    case 'EntitySlotsSwapped': {
+      if (!document) return null;
+      const a = document.placements.find(
+        (p) => p.placedEntityId === event.data.entityIdA,
+      );
+      const b = document.placements.find(
+        (p) => p.placedEntityId === event.data.entityIdB,
+      );
+      if (!a || !b) return document;
+      return {
+        ...document,
+        placements: document.placements.map((p) => {
+          if (p.placedEntityId === a.placedEntityId) return { ...p, slot: b.slot };
+          if (p.placedEntityId === b.placedEntityId) return { ...p, slot: a.slot };
+          return p;
+        }),
+      };
+    }
     case 'EntityRemovedFromSlice':
       return document
         ? {
@@ -84,11 +102,11 @@ export const slicePlacementsProjection = pongoMultiStreamProjection<
   canHandle: [
     'SliceDefined',
     'EntityPlaced',
-    'EntityMoved',
+    'EntitySlotsSwapped',
     'EntityRemovedFromSlice',
     'SliceRenamed',
     'SliceArchived',
   ],
-  getDocumentId: (event) => event.data.entityId,
+  getDocumentId: (event) => event.data.sliceId,
   evolve: evolveSlicePlacements,
 });

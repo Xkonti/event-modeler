@@ -6,26 +6,75 @@ import {
   type RelationEdgeDoc,
 } from './relationsGraph.ts';
 
+/** Unit tests for the relations-graph fold — pure, no database. */
 const ev = (e: RelationEvent): ReadEvent<RelationEvent> =>
   e as ReadEvent<RelationEvent>;
 
+const M = 'm-budget';
+
 describe('evolveRelationsGraph', () => {
-  it('creates an edge doc on RelationDrawn', () => {
+  it('creates an edge document with the stored kind + meta on RelationDrawn (F4)', () => {
     const doc = evolveRelationsGraph(
       null,
       ev({
         type: 'RelationDrawn',
-        data: { entityId: 'r1', fromId: 'c1', toId: 'f1' },
+        data: {
+          modelId: M,
+          relationId: 'r1',
+          fromId: 'a',
+          toId: 'b',
+          kind: 'produces',
+          meta: { note: 'x' },
+        },
       }),
     );
-    expect(doc).toEqual({ _id: 'r1', fromId: 'c1', toId: 'f1' });
+    expect(doc).toEqual({
+      _id: 'r1',
+      modelId: M,
+      fromId: 'a',
+      toId: 'b',
+      kind: 'produces',
+      meta: { note: 'x' },
+    });
   });
 
-  it('drops the doc on RelationRemoved', () => {
-    const base: RelationEdgeDoc = { _id: 'r1', fromId: 'c1', toId: 'f1' };
+  it('replaces kind + meta on RelationInfoUpdated', () => {
+    const existing: RelationEdgeDoc = {
+      _id: 'r1',
+      modelId: M,
+      fromId: 'a',
+      toId: 'b',
+      kind: 'produces',
+      meta: { note: 'x' },
+    };
     const doc = evolveRelationsGraph(
-      base,
-      ev({ type: 'RelationRemoved', data: { entityId: 'r1' } }),
+      existing,
+      ev({
+        type: 'RelationInfoUpdated',
+        data: {
+          modelId: M,
+          relationId: 'r1',
+          fromId: 'a',
+          toId: 'b',
+          kind: 'produces',
+          meta: { note: 'y' },
+        },
+      }),
+    );
+    expect(doc?.meta).toEqual({ note: 'y' });
+  });
+
+  it('deletes the document on RelationRemoved', () => {
+    const existing: RelationEdgeDoc = {
+      _id: 'r1',
+      modelId: M,
+      fromId: 'a',
+      toId: 'b',
+      kind: 'produces',
+    };
+    const doc = evolveRelationsGraph(
+      existing,
+      ev({ type: 'RelationRemoved', data: { modelId: M, relationId: 'r1' } }),
     );
     expect(doc).toBeNull();
   });

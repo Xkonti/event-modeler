@@ -4,6 +4,9 @@ import { modelsProjection } from './read/models.ts';
 import { entityCatalogProjection } from './read/entityCatalog.ts';
 import { slicePlacementsProjection } from './read/slicePlacements.ts';
 import { relationsGraphProjection } from './read/relationsGraph.ts';
+import { contextsProjection } from './read/contexts.ts';
+import { scenariosProjection } from './read/scenarios.ts';
+import { registerArchiveCascade } from './reactors/archiveCascade.ts';
 
 /**
  * Async background consumer that runs read-model projectors with checkpointing.
@@ -35,6 +38,12 @@ export const startConsumers = (): PostgreSQLEventStoreConsumer => {
   consumer.projector({ projection: entityCatalogProjection, lock });
   consumer.projector({ projection: slicePlacementsProjection, lock });
   consumer.projector({ projection: relationsGraphProjection, lock });
+  consumer.projector({ projection: contextsProjection, lock });
+  consumer.projector({ projection: scenariosProjection, lock });
+
+  // A1: the entity-archive cascade reactor (E4) — issues RemoveEntityFromSlice
+  // / RemoveRelation for every reference of an archived entity.
+  registerArchiveCascade(consumer, eventStore);
 
   // Do NOT await — `start()` only resolves once the consumer stops.
   void consumer.start();

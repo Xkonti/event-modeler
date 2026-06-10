@@ -38,9 +38,10 @@ describe('route protection (B6–B9)', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
+        modelId: `m-${randomBytes(5).toString('hex')}`,
         entityId: `f-${randomBytes(5).toString('hex')}`,
         name: `Fact ${randomBytes(5).toString('hex')}`,
-        context: 'Budgeting',
+        fields: [],
       }),
     });
 

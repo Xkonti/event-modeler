@@ -16,7 +16,7 @@ import type { UserEvent } from '../domain/user/events.ts';
  * The hash is non-reversible → safe at rest. Same free-then-claim shape as
  * `entityNames.ts`.
  *
- * Table created by src/migrations/constraints.ts.
+ * Table created by src/schema.ts.
  */
 export const authUserEmailIndex = postgreSQLRawBatchSQLProjection<UserEvent>({
   name: 'auth_user_email_index_constraint',

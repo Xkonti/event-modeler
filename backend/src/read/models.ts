@@ -1,6 +1,7 @@
 import { pongoMultiStreamProjection } from '@event-driven-io/emmett-postgresql';
 import type { ReadEvent } from '@event-driven-io/emmett';
 import type { ModelEvent } from '../domain/model/events.ts';
+import type { SliceArchived, SliceDefined } from '../domain/slice/events.ts';
 
 /**
  * READ MODEL (not a constraint) — the model list the W2 dashboard queries. One
@@ -12,11 +13,10 @@ import type { ModelEvent } from '../domain/model/events.ts';
  * only the dashboard would read stale data. That is what makes it a read model
  * (notes/constraint-inline-projection-pattern.md).
  *
- * `sliceCount` is DERIVED (no dedicated fact). At F0 it is always 0; the slice
- * fold (SliceDefined − SliceArchived, scoped by modelId) lands with the slice
- * vertical (S1), once slice events carry `modelId`. `lastEditedAt` is likewise
- * deferred — Emmett's read-event metadata exposes positions, not a wall-clock
- * timestamp, so it needs a dedicated source (added later).
+ * `sliceCount` is DERIVED (no dedicated fact): SliceDefined − SliceArchived,
+ * scoped by `modelId` (S1). `lastEditedAt` was CUT from v1 — Emmett's read-event
+ * metadata exposes positions, not a wall-clock timestamp, so it needs a
+ * dedicated source; the W2 dashboard ships without it (decision at S2).
  */
 export type ModelDoc = {
   _id: string;
@@ -25,10 +25,13 @@ export type ModelDoc = {
   sliceCount: number;
 };
 
+/** The events this projection folds: model lifecycle + the slice count signals. */
+export type ModelsEvent = ModelEvent | SliceDefined | SliceArchived;
+
 /** Pure fold — exported for unit testing without a database. */
 export const evolveModels = (
   document: ModelDoc | null,
-  event: ReadEvent<ModelEvent>,
+  event: ReadEvent<ModelsEvent>,
 ): ModelDoc | null => {
   switch (event.type) {
     case 'ModelCreated':
@@ -42,12 +45,27 @@ export const evolveModels = (
       return document ? { ...document, name: event.data.name } : null;
     case 'ModelArchived':
       return document ? { ...document, archived: true } : null;
+    // sliceCount is derived from the slice lifecycle, keyed by the event's
+    // modelId. A slice event for an unknown model (out-of-order replay) is a
+    // no-op — the count re-derives correctly on rebuild.
+    case 'SliceDefined':
+      return document ? { ...document, sliceCount: document.sliceCount + 1 } : null;
+    case 'SliceArchived':
+      return document
+        ? { ...document, sliceCount: Math.max(0, document.sliceCount - 1) }
+        : null;
   }
 };
 
-export const modelsProjection = pongoMultiStreamProjection<ModelDoc, ModelEvent>({
+export const modelsProjection = pongoMultiStreamProjection<ModelDoc, ModelsEvent>({
   collectionName: 'models',
-  canHandle: ['ModelCreated', 'ModelRenamed', 'ModelArchived'],
+  canHandle: [
+    'ModelCreated',
+    'ModelRenamed',
+    'ModelArchived',
+    'SliceDefined',
+    'SliceArchived',
+  ],
   getDocumentId: (event) => event.data.modelId,
   evolve: evolveModels,
 });

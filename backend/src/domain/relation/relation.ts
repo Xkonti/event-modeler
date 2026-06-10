@@ -1,22 +1,32 @@
 import { IllegalStateError, type Command } from '@event-driven-io/emmett';
-import type { RelationEvent } from './events.ts';
+import type { RelationEvent, RelationMeta } from './events.ts';
+import { isBlank } from '../../shared/fields.ts';
 
 /**
- * Decider for a single relation stream. Enforces ONLY within-stream invariants:
- * a relation can be drawn once and removed only while drawn.
+ * Decider for a single relation stream. Within-stream invariants: drawn once,
+ * edited/removed only while drawn, kind non-blank. Endpoint type-pair VALIDITY
+ * (allow-list, endpoint existence, same-model — G-C8) is the API edge's catalog
+ * pre-check; the cross-stream duplicate-(from,to,kind) rule (E3) is the inline
+ * `relation_pairs` constraint.
  *
- * Endpoint type-pair VALIDITY (is `from → to` an allowed, existing pair?) is NOT
- * decided here — a decider sees one stream only. It is checked in the api layer
- * against the catalog (eventually consistent; acceptable single-user). The future
- * "both endpoints free" claim is a separate inline `entity_claims` constraint.
+ * `modelId`/`fromId`/`toId` are set at Draw and immutable; UpdateRelationInfo
+ * changes only `kind`/`meta` and the decider stamps the rest from state.
  */
 
 // --- State ---------------------------------------------------------------
 
 export type Relation =
   | { status: 'empty' }
-  | { status: 'drawn'; entityId: string; fromId: string; toId: string }
-  | { status: 'removed'; entityId: string };
+  | {
+      status: 'drawn';
+      modelId: string;
+      relationId: string;
+      fromId: string;
+      toId: string;
+      kind: string;
+      meta?: RelationMeta;
+    }
+  | { status: 'removed'; relationId: string };
 
 export const initialState = (): Relation => ({ status: 'empty' });
 
@@ -24,11 +34,22 @@ export const initialState = (): Relation => ({ status: 'empty' });
 
 export type DrawRelation = Command<
   'DrawRelation',
-  { entityId: string; fromId: string; toId: string }
+  {
+    modelId: string;
+    relationId: string;
+    fromId: string;
+    toId: string;
+    kind: string;
+    meta?: RelationMeta;
+  }
 >;
-export type RemoveRelation = Command<'RemoveRelation', { entityId: string }>;
+export type UpdateRelationInfo = Command<
+  'UpdateRelationInfo',
+  { relationId: string; kind?: string; meta?: RelationMeta }
+>;
+export type RemoveRelation = Command<'RemoveRelation', { relationId: string }>;
 
-export type RelationCommand = DrawRelation | RemoveRelation;
+export type RelationCommand = DrawRelation | UpdateRelationInfo | RemoveRelation;
 
 // --- Decide --------------------------------------------------------------
 
@@ -40,15 +61,40 @@ export const decide = (
     case 'DrawRelation': {
       if (state.status !== 'empty')
         throw new IllegalStateError('Relation already drawn');
-      const { entityId, fromId, toId } = command.data;
-      return { type: 'RelationDrawn', data: { entityId, fromId, toId } };
+      const { modelId, relationId, fromId, toId, kind, meta } = command.data;
+      if (isBlank(kind))
+        throw new IllegalStateError('Relation kind must not be blank');
+      return {
+        type: 'RelationDrawn',
+        data: { modelId, relationId, fromId, toId, kind, meta },
+      };
+    }
+    case 'UpdateRelationInfo': {
+      if (state.status !== 'drawn')
+        throw new IllegalStateError('Can only update a drawn relation');
+      const kind = command.data.kind ?? state.kind;
+      if (isBlank(kind))
+        throw new IllegalStateError('Relation kind must not be blank');
+      // meta is full-replace when given; untouched otherwise.
+      const meta = 'meta' in command.data ? command.data.meta : state.meta;
+      return {
+        type: 'RelationInfoUpdated',
+        data: {
+          modelId: state.modelId,
+          relationId: state.relationId,
+          fromId: state.fromId,
+          toId: state.toId,
+          kind,
+          meta,
+        },
+      };
     }
     case 'RemoveRelation': {
       if (state.status !== 'drawn')
         throw new IllegalStateError('Can only remove a drawn relation');
       return {
         type: 'RelationRemoved',
-        data: { entityId: command.data.entityId },
+        data: { modelId: state.modelId, relationId: state.relationId },
       };
     }
   }
@@ -58,14 +104,15 @@ export const decide = (
 
 export const evolve = (state: Relation, event: RelationEvent): Relation => {
   switch (event.type) {
-    case 'RelationDrawn':
-      return {
-        status: 'drawn',
-        entityId: event.data.entityId,
-        fromId: event.data.fromId,
-        toId: event.data.toId,
-      };
+    case 'RelationDrawn': {
+      const { modelId, relationId, fromId, toId, kind, meta } = event.data;
+      return { status: 'drawn', modelId, relationId, fromId, toId, kind, meta };
+    }
+    case 'RelationInfoUpdated':
+      return state.status === 'drawn'
+        ? { ...state, kind: event.data.kind, meta: event.data.meta }
+        : state;
     case 'RelationRemoved':
-      return { status: 'removed', entityId: event.data.entityId };
+      return { status: 'removed', relationId: event.data.relationId };
   }
 };

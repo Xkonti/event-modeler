@@ -1,15 +1,21 @@
 import pg from 'pg';
-import { connectionString as defaultConnectionString } from '../config.ts';
+import { connectionString as defaultConnectionString } from './config.ts';
 
 /**
- * Creates the strongly-consistent CONSTRAINT tables. These are load-bearing
- * (the write path depends on them), so they must exist before the first guarded
- * append — unlike read models, they are not auto-rebuilt from events.
+ * Creates the app's non-Emmett tables: the strongly-consistent CONSTRAINT tables
+ * (load-bearing — the write path depends on them) plus the auth tables. Emmett
+ * owns its own `emt_*` schema (`eventStore.schema.migrate()`); this owns the rest.
  *
- *  - entity_names  : global entity-name uniqueness (PK on normalized_name).
+ * NO migrations: the DB is wiped and recreated, never upgraded in place. So this
+ * is plain first-time table creation on a fresh DB, run at boot (src/index.ts)
+ * and by the integration harness. There is no versioning, ALTER, or upgrade path.
+ *
+ *  - entity_names  : per-model entity-name uniqueness across all named types
+ *                    (PK on (model_id, normalized_name); F1b). One namespace per
+ *                    model — a command can't share a name with a fact.
  *  - entity_claims : session ownership, ≤1 session per entity (future; PK on
- *                    entity_id). Same pattern as names — see
- *                    notes/sessions-and-collaboration.md.
+ *                    entity_id). Same pattern as names —
+ *                    see notes/sessions-and-collaboration.md.
  *
  * Auth tables (notes/auth-architecture.md):
  *  - auth_user_keys        : deletable per-user DEK store — the crypto-shred lever.
@@ -21,10 +27,8 @@ import { connectionString as defaultConnectionString } from '../config.ts';
  *
  * Uses `pg` (not Bun-specific APIs) so it runs under both Bun and Node — the
  * latter matters because testcontainers integration tests run on Node.
- *
- * Run via `bun run migrate`, and also invoked on startup by src/index.ts.
  */
-export const migrateConstraints = async (
+export const createSchema = async (
   connectionString: string = defaultConnectionString,
 ): Promise<void> => {
   const client = new pg.Client({ connectionString });
@@ -32,9 +36,35 @@ export const migrateConstraints = async (
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS entity_names (
-        normalized_name text PRIMARY KEY,
+        model_id        text NOT NULL,
+        normalized_name text NOT NULL,
         entity_id       text NOT NULL UNIQUE,
-        entity_type     text NOT NULL
+        entity_type     text NOT NULL,
+        PRIMARY KEY (model_id, normalized_name)
+      )
+    `);
+
+    // Context (lane) names — contexts' OWN namespace, separate from
+    // entity_names (G-C2): a lane may share its name with a fact, never with
+    // another lane in the same model.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS context_names (
+        model_id        text NOT NULL,
+        normalized_name text NOT NULL,
+        context_id      text NOT NULL UNIQUE,
+        PRIMARY KEY (model_id, normalized_name)
+      )
+    `);
+
+    // Relation pair uniqueness — no duplicate (from, to, kind) edge (E3). Each
+    // relation is its own stream, so this set invariant is enforced inline.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS relation_pairs (
+        from_id     text NOT NULL,
+        to_id       text NOT NULL,
+        kind        text NOT NULL,
+        relation_id text NOT NULL UNIQUE,
+        PRIMARY KEY (from_id, to_id, kind)
       )
     `);
 
@@ -122,12 +152,3 @@ export const migrateConstraints = async (
     await client.end();
   }
 };
-
-if (import.meta.main) {
-  await migrateConstraints();
-  console.log(
-    '✅ Constraint + auth tables ready (entity_names, entity_claims, ' +
-      'auth_user_keys, auth_user_email_index, auth_account_index, ' +
-      'auth_session, auth_verification).',
-  );
-}

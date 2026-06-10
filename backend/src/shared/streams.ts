@@ -9,12 +9,16 @@
 export type EntityType =
   | 'model'
   | 'businessFact'
+  | 'externalBusinessFact'
   | 'command'
   | 'readModel'
   | 'wireframe'
   | 'automation'
+  | 'translation'
+  | 'context'
   | 'slice'
   | 'relation'
+  | 'scenario'
   | 'user'
   | 'account';
 
@@ -42,5 +46,27 @@ export const sliceStreamId = (id: string): string => streamId('slice', id);
 /** One stream per command entity: `command-{entityId}`. */
 export const commandStreamId = (id: string): string => streamId('command', id);
 
-/** One stream per relation: `relation-{entityId}` (references both endpoints). */
+/** One stream per read-model entity: `readModel-{entityId}`. */
+export const readModelStreamId = (id: string): string => streamId('readModel', id);
+
+/** One stream per wireframe entity: `wireframe-{entityId}`. */
+export const wireframeStreamId = (id: string): string => streamId('wireframe', id);
+
+/** One stream per external business fact: `externalBusinessFact-{entityId}`. */
+export const externalBusinessFactStreamId = (id: string): string =>
+  streamId('externalBusinessFact', id);
+
+/** One stream per relation: `relation-{relationId}` (references both endpoints). */
 export const relationStreamId = (id: string): string => streamId('relation', id);
+
+/** One stream per automation entity: `automation-{entityId}`. */
+export const automationStreamId = (id: string): string => streamId('automation', id);
+
+/** One stream per translation entity: `translation-{entityId}`. */
+export const translationStreamId = (id: string): string => streamId('translation', id);
+
+/** One stream per context (swimlane): `context-{contextId}`. */
+export const contextStreamId = (id: string): string => streamId('context', id);
+
+/** One stream per scenario (GWT/GT rule): `scenario-{scenarioId}`. */
+export const scenarioStreamId = (id: string): string => streamId('scenario', id);

@@ -14,9 +14,9 @@
  * inside `bootAuthHarness()` once the container URI + fixed keys are in env.
  *
  * What it gives the suites:
- *   - a real Postgres (testcontainers `postgres:16-alpine`), migrated exactly as
+ *   - a real Postgres (testcontainers `postgres:16-alpine`), set up exactly as
  *     `nameUniqueness.test.ts` does (`eventStore.schema.migrate()` +
- *     `migrateConstraints(uri)`);
+ *     `createSchema(uri)`);
  *   - the REAL Express app from `buildAuthApp({ auth, eventStore })` listening on
  *     an ephemeral port (`startAPI(app, { port: 0 })`) — the same HTTP assembly
  *     prod runs, so the auth-raw-before-json ordering is exercised, not faked;
@@ -157,7 +157,7 @@ export const bootAuthHarness = async (): Promise<AuthHarness> => {
   // "terminating connection due to administrator command" the container stop
   // would otherwise raise on a still-open short-lived pg client.
   const storeMod = await import('../../src/eventStore.ts');
-  const { migrateConstraints } = await import('../../src/migrations/constraints.ts');
+  const { createSchema } = await import('../../src/schema.ts');
   const crypto = await import('../../src/auth/crypto.ts');
   const keystore = await import('../../src/auth/keystore.ts');
   const { esCryptoAdapter } = await import('../../src/auth/adapter.ts');
@@ -167,7 +167,7 @@ export const bootAuthHarness = async (): Promise<AuthHarness> => {
 
   const eventStore = storeMod.eventStore; // singleton, bound to connectionString
   await eventStore.schema.migrate();
-  await migrateConstraints(connectionString);
+  await createSchema(connectionString);
   teardowns.push(async () => {
     await eventStore.close();
   });

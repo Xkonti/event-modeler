@@ -4,133 +4,289 @@ import { decide, evolve, initialState } from './slice.ts';
 
 /**
  * Unit tests for the slice decider — pure GIVEN events / WHEN command / THEN
- * events, no database. Exercises the within-stream placement invariants.
+ * events, no database. Exercises the F3 snap-slot invariants: computed band +
+ * appended slot, single-cardinality types (one command/automation/translation
+ * per slice), same-band slotted swaps, placement uniqueness, archive terminal.
  */
 const given = DeciderSpecification.for({ decide, evolve, initialState });
 
+const M = 'm-budget';
 const defined = {
   type: 'SliceDefined' as const,
-  data: { entityId: 's1', name: 'Checkout' },
+  data: { modelId: M, sliceId: 's1', name: 'Checkout' },
 };
-const placed = {
+const factPlaced = {
   type: 'EntityPlaced' as const,
-  data: { entityId: 's1', placedEntityId: 'e1', x: 10, y: 20 },
+  data: {
+    modelId: M,
+    sliceId: 's1',
+    placedEntityId: 'f1',
+    entityType: 'businessFact' as const,
+    slotRole: 'fact' as const,
+    slot: 0,
+  },
 };
-const archived = {
-  type: 'SliceArchived' as const,
-  data: { entityId: 's1' },
+const commandPlaced = {
+  type: 'EntityPlaced' as const,
+  data: {
+    modelId: M,
+    sliceId: 's1',
+    placedEntityId: 'c1',
+    entityType: 'command' as const,
+    slotRole: 'command' as const,
+    slot: undefined,
+  },
 };
 
 describe('slice decider', () => {
-  it('defines a slice from empty', () => {
+  it('defines a slice (name optional)', () => {
     given([])
-      .when({ type: 'DefineSlice', data: { entityId: 's1', name: 'Checkout' } })
-      .then([defined]);
+      .when({ type: 'DefineSlice', data: { modelId: M, sliceId: 's1' } })
+      .then([{ type: 'SliceDefined', data: { modelId: M, sliceId: 's1', name: undefined } }]);
   });
 
-  it('rejects defining an already-defined slice', () => {
+  it('rejects defining a slice twice', () => {
     given([defined])
-      .when({ type: 'DefineSlice', data: { entityId: 's1' } })
+      .when({ type: 'DefineSlice', data: { modelId: M, sliceId: 's1' } })
       .thenThrows();
   });
 
-  it('places an entity on an active slice', () => {
+  it('places a fact into the fact band at slot 0 (F3)', () => {
     given([defined])
       .when({
         type: 'PlaceEntity',
-        data: { entityId: 's1', placedEntityId: 'e1', x: 10, y: 20 },
+        data: { sliceId: 's1', placedEntityId: 'f1', entityType: 'businessFact' },
       })
-      .then([placed]);
+      .then([factPlaced]);
   });
 
-  it('rejects placing on an undefined slice', () => {
-    given([])
+  it('appends the next fact below (slot 1), independent of other bands', () => {
+    given([defined, factPlaced, commandPlaced])
       .when({
         type: 'PlaceEntity',
-        data: { entityId: 's1', placedEntityId: 'e1', x: 0, y: 0 },
-      })
-      .thenThrows();
-  });
-
-  it('rejects placing the same entity twice', () => {
-    given([defined, placed])
-      .when({
-        type: 'PlaceEntity',
-        data: { entityId: 's1', placedEntityId: 'e1', x: 5, y: 5 },
-      })
-      .thenThrows();
-  });
-
-  it('moves a placed entity', () => {
-    given([defined, placed])
-      .when({
-        type: 'MoveEntity',
-        data: { entityId: 's1', placedEntityId: 'e1', x: 99, y: 99 },
+        data: { sliceId: 's1', placedEntityId: 'f2', entityType: 'externalBusinessFact' },
       })
       .then([
         {
-          type: 'EntityMoved',
-          data: { entityId: 's1', placedEntityId: 'e1', x: 99, y: 99 },
+          type: 'EntityPlaced',
+          data: {
+            modelId: M,
+            sliceId: 's1',
+            placedEntityId: 'f2',
+            entityType: 'externalBusinessFact',
+            slotRole: 'fact',
+            slot: 1,
+          },
         },
       ]);
   });
 
-  it('rejects moving an unplaced entity', () => {
+  it('places a command without a slot (single-cardinality)', () => {
     given([defined])
       .when({
-        type: 'MoveEntity',
-        data: { entityId: 's1', placedEntityId: 'eX', x: 0, y: 0 },
+        type: 'PlaceEntity',
+        data: { sliceId: 's1', placedEntityId: 'c1', entityType: 'command' },
+      })
+      .then([commandPlaced]);
+  });
+
+  it('rejects a SECOND command on the same slice (band cardinality)', () => {
+    given([defined, commandPlaced])
+      .when({
+        type: 'PlaceEntity',
+        data: { sliceId: 's1', placedEntityId: 'c2', entityType: 'command' },
+      })
+      .thenThrows();
+  });
+
+  it('allows an automation alongside a wireframe in the trigger band', () => {
+    given([
+      defined,
+      {
+        type: 'EntityPlaced',
+        data: {
+          modelId: M,
+          sliceId: 's1',
+          placedEntityId: 'w1',
+          entityType: 'wireframe',
+          slotRole: 'trigger',
+          slot: 0,
+        },
+      },
+    ])
+      .when({
+        type: 'PlaceEntity',
+        data: { sliceId: 's1', placedEntityId: 'a1', entityType: 'automation' },
+      })
+      .then([
+        {
+          type: 'EntityPlaced',
+          data: {
+            modelId: M,
+            sliceId: 's1',
+            placedEntityId: 'a1',
+            entityType: 'automation',
+            slotRole: 'trigger',
+            slot: undefined,
+          },
+        },
+      ]);
+  });
+
+  it('rejects placing the same entity twice', () => {
+    given([defined, factPlaced])
+      .when({
+        type: 'PlaceEntity',
+        data: { sliceId: 's1', placedEntityId: 'f1', entityType: 'businessFact' },
+      })
+      .thenThrows();
+  });
+
+  it('rejects placing a non-placeable type (the model root)', () => {
+    given([defined])
+      .when({
+        type: 'PlaceEntity',
+        data: { sliceId: 's1', placedEntityId: 'm1', entityType: 'model' },
+      })
+      .thenThrows();
+  });
+
+  it('swaps slots of two facts in the same band', () => {
+    given([
+      defined,
+      factPlaced,
+      {
+        type: 'EntityPlaced',
+        data: {
+          modelId: M,
+          sliceId: 's1',
+          placedEntityId: 'f2',
+          entityType: 'businessFact',
+          slotRole: 'fact',
+          slot: 1,
+        },
+      },
+    ])
+      .when({
+        type: 'SwapEntitySlots',
+        data: { sliceId: 's1', entityIdA: 'f1', entityIdB: 'f2' },
+      })
+      .then([
+        {
+          type: 'EntitySlotsSwapped',
+          data: { modelId: M, sliceId: 's1', entityIdA: 'f1', entityIdB: 'f2' },
+        },
+      ]);
+  });
+
+  it('rejects a swap across bands (F3)', () => {
+    given([
+      defined,
+      factPlaced,
+      {
+        type: 'EntityPlaced',
+        data: {
+          modelId: M,
+          sliceId: 's1',
+          placedEntityId: 'r1',
+          entityType: 'readModel',
+          slotRole: 'readModel',
+          slot: 0,
+        },
+      },
+    ])
+      .when({
+        type: 'SwapEntitySlots',
+        data: { sliceId: 's1', entityIdA: 'f1', entityIdB: 'r1' },
+      })
+      .thenThrows();
+  });
+
+  it('rejects a swap involving an unslotted (single) placement', () => {
+    given([
+      defined,
+      commandPlaced,
+      {
+        type: 'EntityPlaced',
+        data: {
+          modelId: M,
+          sliceId: 's1',
+          placedEntityId: 'a1',
+          entityType: 'automation',
+          slotRole: 'trigger',
+          slot: undefined,
+        },
+      },
+      {
+        type: 'EntityPlaced',
+        data: {
+          modelId: M,
+          sliceId: 's1',
+          placedEntityId: 'w1',
+          entityType: 'wireframe',
+          slotRole: 'trigger',
+          slot: 0,
+        },
+      },
+    ])
+      .when({
+        type: 'SwapEntitySlots',
+        data: { sliceId: 's1', entityIdA: 'a1', entityIdB: 'w1' },
       })
       .thenThrows();
   });
 
   it('removes a placed entity', () => {
-    given([defined, placed])
+    given([defined, factPlaced])
       .when({
         type: 'RemoveEntityFromSlice',
-        data: { entityId: 's1', placedEntityId: 'e1' },
+        data: { sliceId: 's1', placedEntityId: 'f1' },
       })
       .then([
         {
           type: 'EntityRemovedFromSlice',
-          data: { entityId: 's1', placedEntityId: 'e1' },
+          data: { modelId: M, sliceId: 's1', placedEntityId: 'f1' },
         },
       ]);
   });
 
-  it('rejects removing an unplaced entity', () => {
+  it('rejects removing an entity that is not placed', () => {
     given([defined])
       .when({
         type: 'RemoveEntityFromSlice',
-        data: { entityId: 's1', placedEntityId: 'eX' },
+        data: { sliceId: 's1', placedEntityId: 'ghost' },
       })
       .thenThrows();
   });
 
-  it('rejects placing on an archived slice', () => {
-    given([defined, archived])
+  it('frees the spot after removal — placing again works (slot re-appended)', () => {
+    given([
+      defined,
+      factPlaced,
+      {
+        type: 'EntityRemovedFromSlice',
+        data: { modelId: M, sliceId: 's1', placedEntityId: 'f1' },
+      },
+    ])
       .when({
         type: 'PlaceEntity',
-        data: { entityId: 's1', placedEntityId: 'e2', x: 0, y: 0 },
+        data: { sliceId: 's1', placedEntityId: 'f1', entityType: 'businessFact' },
       })
-      .thenThrows();
-  });
-
-  it('renames an active slice', () => {
-    given([defined])
-      .when({ type: 'RenameSlice', data: { entityId: 's1', name: 'Pay' } })
-      .then([{ type: 'SliceRenamed', data: { entityId: 's1', name: 'Pay' } }]);
+      .then([factPlaced]);
   });
 
   it('archives an active slice', () => {
     given([defined])
-      .when({ type: 'ArchiveSlice', data: { entityId: 's1' } })
-      .then([archived]);
+      .when({ type: 'ArchiveSlice', data: { sliceId: 's1' } })
+      .then([{ type: 'SliceArchived', data: { modelId: M, sliceId: 's1' } }]);
   });
 
-  it('rejects archiving an already-archived slice', () => {
-    given([defined, archived])
-      .when({ type: 'ArchiveSlice', data: { entityId: 's1' } })
+  it('rejects placing on an archived slice', () => {
+    given([defined, { type: 'SliceArchived', data: { modelId: M, sliceId: 's1' } }])
+      .when({
+        type: 'PlaceEntity',
+        data: { sliceId: 's1', placedEntityId: 'f1', entityType: 'businessFact' },
+      })
       .thenThrows();
   });
 });

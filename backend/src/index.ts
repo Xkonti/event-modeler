@@ -2,7 +2,7 @@ import { startAPI } from '@event-driven-io/emmett-expressjs';
 import { port } from './config.ts';
 import { eventStore } from './eventStore.ts';
 import { startConsumers } from './consumers.ts';
-import { migrateConstraints } from './migrations/constraints.ts';
+import { createSchema } from './schema.ts';
 import { auth } from './auth/auth.ts';
 import { buildAuthApp } from './http/app.ts';
 
@@ -11,9 +11,10 @@ import { buildAuthApp } from './http/app.ts';
  *
  * Boot order matters: the Emmett `emt_*` schema (tables + stored functions)
  * must exist before consumers register and before any guarded append; the
- * constraint tables (incl. the auth keystore + blind indexes) must exist before
- * the first guarded append or session lookup. So: migrate schema → migrate
- * constraints → serve → start consumers (background).
+ * constraint + auth tables must exist before the first guarded append or session
+ * lookup. So: Emmett schema → createSchema → serve → start consumers (background).
+ * The DB is wiped + recreated, never migrated — createSchema is plain first-time
+ * table creation on a fresh DB.
  *
  * `buildAuthApp` (src/http/app.ts) is the SINGLE HTTP assembly source shared
  * with the integration harness; it owns the auth-raw-before-json ordering and
@@ -23,7 +24,7 @@ import { buildAuthApp } from './http/app.ts';
  */
 const main = async (): Promise<void> => {
   await eventStore.schema.migrate();
-  await migrateConstraints();
+  await createSchema();
 
   const app = buildAuthApp({ auth, eventStore });
   startAPI(app, { port });
