@@ -56,6 +56,18 @@ export const createSchema = async (
       )
     `);
 
+    // Chapter (C1 band) names — chapters' OWN namespace, separate from
+    // entity_names and context_names (G-C2): a chapter may share its name with
+    // a fact or a lane, never with another chapter in the same model.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chapter_names (
+        model_id        text NOT NULL,
+        normalized_name text NOT NULL,
+        chapter_id      text NOT NULL UNIQUE,
+        PRIMARY KEY (model_id, normalized_name)
+      )
+    `);
+
     // Relation pair uniqueness — no duplicate (from, to, kind) edge (E3). Each
     // relation is its own stream, so this set invariant is enforced inline.
     await client.query(`

@@ -121,6 +121,59 @@ describe('computeModelValidation', () => {
     expect(findings.filter((f) => f.entityId === 'r1')).toEqual([]);
   });
 
+  // F7 — derived markers (em-scenarios § A3 GTs, 2026-06-10)
+  it('skips a derived read-model field with no feeding source (F7)', () => {
+    const input = completeModel();
+    input.entries = input.entries.map((e) =>
+      e._id === 'r1'
+        ? {
+            ...e,
+            definition: {
+              fields: [
+                { fieldName: 'amount', fieldType: 'money' },
+                { fieldName: 'sliceCount', fieldType: 'int', derived: true },
+              ],
+            },
+          }
+        : e,
+    );
+    const findings = computeModelValidation(input);
+    expect(findings.filter((f) => f.kind === 'field-without-source')).toEqual([]);
+  });
+
+  it('skips a live read model with zero feeding facts (F7)', () => {
+    const findings = computeModelValidation({
+      entries: [
+        {
+          ...entry('r-export', 'readModel', 'model_export', [
+            { fieldName: 'entities', fieldType: 'CatalogEntry[]' },
+          ]),
+          definition: {
+            fields: [{ fieldName: 'entities', fieldType: 'CatalogEntry[]' }],
+            mode: 'live',
+          },
+        },
+      ],
+      edges: [],
+      scenarios: [],
+    });
+    expect(findings).toEqual([]);
+  });
+
+  it('still flags a projected read model with zero feeding facts (F7)', () => {
+    const findings = computeModelValidation({
+      entries: [
+        {
+          ...entry('r-list', 'readModel', 'orphan_list'),
+          definition: { fields: [], mode: 'projected' },
+        },
+      ],
+      edges: [],
+      scenarios: [],
+    });
+    expect(findings.map((f) => f.kind)).toContain('readmodel-without-source');
+  });
+
   it('flags a scenario referencing a missing entity (out-of-sync)', () => {
     const input = completeModel();
     input.scenarios = [

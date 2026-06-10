@@ -4,6 +4,7 @@ import type { AppEventStore } from '../../eventStore.ts';
 import { documents } from '../../db.ts';
 import type { CatalogEntry } from '../../read/entityCatalog.ts';
 import { decide, type ExternalBusinessFactCommand } from './externalBusinessFact.ts';
+import { sanitizeFields } from '../../shared/fields.ts';
 import { handleExternalBusinessFact } from './commandHandler.ts';
 import { checkLaneAssignable } from '../context/assignmentChecks.ts';
 import type { Auth } from '../../auth/auth.ts';
@@ -51,7 +52,7 @@ export const externalBusinessFactApi =
         return void res.status(400).json({ ok: false, error: 'entityId required' });
       void run(res, entityId, {
         type: 'DefineExternalBusinessFact',
-        data: { modelId, entityId, name, fields: Array.isArray(fields) ? fields : [] },
+        data: { modelId, entityId, name, fields: sanitizeFields(fields) },
       });
     });
 
@@ -77,7 +78,7 @@ export const externalBusinessFactApi =
         const { fields } = req.body ?? {};
         void run(res, entityId, {
           type: 'UpdateExternalBusinessFactFields',
-          data: { entityId, fields: Array.isArray(fields) ? fields : [] },
+          data: { entityId, fields: sanitizeFields(fields) },
         });
       },
     );

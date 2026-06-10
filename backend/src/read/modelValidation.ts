@@ -43,6 +43,18 @@ const fieldsOf = (entry: CatalogEntry): string[] =>
     ? entry.definition.fields.map((f) => f.fieldName)
     : [];
 
+/** Non-derived fields only — derived attributes (F7) have no upstream source by design. */
+const sourcedFieldsOf = (entry: CatalogEntry): string[] =>
+  entry.definition && 'fields' in entry.definition
+    ? entry.definition.fields.filter((f) => f.derived !== true).map((f) => f.fieldName)
+    : [];
+
+/** F7: live read models are assembled from other read models — no feeding facts expected. */
+const isLive = (entry: CatalogEntry): boolean =>
+  entry.definition !== undefined &&
+  'mode' in entry.definition &&
+  entry.definition.mode === 'live';
+
 export const computeModelValidation = ({
   entries,
   edges,
@@ -91,6 +103,9 @@ export const computeModelValidation = ({
         break;
       }
       case 'readModel': {
+        // F7: live read models read other read models, not facts — the
+        // source/field checks don't apply (es-book ch 31 Live Model).
+        if (isLive(entry)) break;
         const feeders = inbound.filter((e) =>
           (READMODEL_SOURCE_KINDS as string[]).includes(e.kind),
         );
@@ -103,15 +118,16 @@ export const computeModelValidation = ({
           });
           break;
         }
-        // Field presence: every read-model field name should appear on at
-        // least one feeding fact (normalized compare; free-form types — O4).
+        // Field presence: every non-derived read-model field name should appear
+        // on at least one feeding fact (normalized compare; free-form types —
+        // O4). Derived fields (F7) are computed in the projection — skipped.
         const available = new Set(
           feeders.flatMap((e) => {
             const source = byId.get(e.fromId);
             return source ? fieldsOf(source).map(normalizeName) : [];
           }),
         );
-        for (const fieldName of fieldsOf(entry))
+        for (const fieldName of sourcedFieldsOf(entry))
           if (!available.has(normalizeName(fieldName)))
             findings.push({
               entityId: entry._id,

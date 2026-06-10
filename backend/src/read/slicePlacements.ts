@@ -27,6 +27,8 @@ export type SlicePlacementsDoc = {
   name?: string;
   placements: SlicePlacement[];
   archived: boolean;
+  /** C1: the chapter this slice sits under; may dangle on an archived chapter (render falls back). */
+  chapterId?: string;
 };
 
 /** Pure fold — exported for unit testing without a database. */
@@ -89,6 +91,10 @@ export const evolveSlicePlacements = (
       return document ? { ...document, name: event.data.name } : null;
     case 'SliceArchived':
       return document ? { ...document, archived: true } : null;
+    case 'SliceAssignedToChapter':
+      return document ? { ...document, chapterId: event.data.chapterId } : null;
+    case 'SliceChapterCleared':
+      return document ? { ...document, chapterId: undefined } : null;
     default:
       return document;
   }
@@ -106,6 +112,8 @@ export const slicePlacementsProjection = pongoMultiStreamProjection<
     'EntityRemovedFromSlice',
     'SliceRenamed',
     'SliceArchived',
+    'SliceAssignedToChapter',
+    'SliceChapterCleared',
   ],
   getDocumentId: (event) => event.data.sliceId,
   evolve: evolveSlicePlacements,

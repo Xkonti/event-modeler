@@ -2,6 +2,7 @@ import type { WebApiSetup } from '@event-driven-io/emmett-expressjs';
 import type { Request, Response, Router } from 'express';
 import { documents } from '../db.ts';
 import type { CatalogEntry } from '../read/entityCatalog.ts';
+import type { ChapterDoc } from '../read/chapters.ts';
 import type { ContextDoc } from '../read/contexts.ts';
 import type { ModelDoc } from '../read/models.ts';
 import type { RelationEdgeDoc } from '../read/relationsGraph.ts';
@@ -27,10 +28,11 @@ export const exportApi = (): WebApiSetup => (router: Router) => {
         res.status(404).json({ ok: false, error: 'not found' });
         return;
       }
-      const [entries, contexts, slices, relations, scenarios] =
+      const [entries, contexts, chapters, slices, relations, scenarios] =
         await Promise.all([
           documents.collection<CatalogEntry>('entity_catalog').find({ modelId }),
           documents.collection<ContextDoc>('contexts').find({ modelId }),
+          documents.collection<ChapterDoc>('chapters').find({ modelId }),
           documents
             .collection<SlicePlacementsDoc>('slice_placements')
             .find({ modelId }),
@@ -44,6 +46,7 @@ export const exportApi = (): WebApiSetup => (router: Router) => {
           model,
           entries,
           contexts,
+          chapters,
           slices,
           relations,
           scenarios,

@@ -292,6 +292,11 @@ Fields live *inside* the definition (brainstorm #1/#7). Business-fact example:
   - **External fact** → yellow; **explicit Lane control** (same assign/clear path as internal facts,
     O5), rendered distinctly (yellow / "external"). **Not** auto-assigned at define.
   - **Command / Read Model** → fields editor; **no** Lane control (lane-agnostic).
+    **Read Model additionally (F7, 2026-06-10):** a `mode` toggle (projected | live) and a
+    per-field **derived** checkbox in the fields editor (rendered distinctly, e.g. ƒ-prefix) —
+    derived fields / live read models are skipped by A3 validation (es-book ch 31/33).
+    The derived checkbox is available on every fields editor (facts use it for
+    decider-computed attributes like `slotRole`).
   - **Automation** → trigger-type (fact | timer | interaction) + monitored read-model ref +
     issued-command ref; edited via **`ReconfigureAutomation`** → *Automation Reconfigured*
     (G3 resolved — no generic *Fields Updated*).
@@ -385,6 +390,11 @@ v1 creates + assigns lanes inline in the inspector (W5/6). The standalone manage
 
 A zoom/scope navigator + level-scheme configurator. Not v1 (v1 = a few slices tiled flat).
 Wireframed for fact coverage; built later.
+
+> **C1 pull-forward (2026-06-10):** a SINGLE-LEVEL **chapter band** ships before full W10 —
+> a labeled band above the W3/W4 canvas (es-book ch 18), chapters created/assigned inline
+> (`DefineChapter`, `AssignSliceToChapter`; em-commands Flow 6). W10's configured hierarchy
+> later absorbs chapters as level-1.
 
 ```
 ┌─ Outline ─────────────────────────┐   Levels (configurable, user-named):

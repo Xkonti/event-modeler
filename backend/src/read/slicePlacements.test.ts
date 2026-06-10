@@ -109,4 +109,38 @@ describe('evolveSlicePlacements', () => {
     );
     expect(archived?.archived).toBe(true);
   });
+
+  it('folds chapter assignment + clear (C1, last-write-wins)', () => {
+    const base: SlicePlacementsDoc = {
+      _id: 's1',
+      modelId: M,
+      name: 'Checkout',
+      placements: [],
+      archived: false,
+    };
+    const assigned = evolveSlicePlacements(
+      base,
+      ev({
+        type: 'SliceAssignedToChapter',
+        data: { modelId: M, sliceId: 's1', chapterId: 'ch1' },
+      }),
+    );
+    expect(assigned?.chapterId).toBe('ch1');
+    const reassigned = evolveSlicePlacements(
+      assigned,
+      ev({
+        type: 'SliceAssignedToChapter',
+        data: { modelId: M, sliceId: 's1', chapterId: 'ch2', previousChapterId: 'ch1' },
+      }),
+    );
+    expect(reassigned?.chapterId).toBe('ch2');
+    const cleared = evolveSlicePlacements(
+      reassigned,
+      ev({
+        type: 'SliceChapterCleared',
+        data: { modelId: M, sliceId: 's1', previousChapterId: 'ch2' },
+      }),
+    );
+    expect(cleared?.chapterId).toBeUndefined();
+  });
 });

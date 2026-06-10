@@ -2,7 +2,7 @@ import { pongoMultiStreamProjection } from '@event-driven-io/emmett-postgresql';
 import type { ReadEvent } from '@event-driven-io/emmett';
 import type { BusinessFactEvent } from '../domain/businessFact/events.ts';
 import type { CommandEvent } from '../domain/command/events.ts';
-import type { ReadModelEvent } from '../domain/readModel/events.ts';
+import type { ReadModelEvent, ReadModelMode } from '../domain/readModel/events.ts';
 import type { WireframeEvent } from '../domain/wireframe/events.ts';
 import type { ExternalBusinessFactEvent } from '../domain/externalBusinessFact/events.ts';
 import type { AutomationEvent, TriggerConfig } from '../domain/automation/events.ts';
@@ -12,6 +12,8 @@ import type {
   SliceDefined,
   SliceRenamed,
   SliceArchived,
+  SliceAssignedToChapter,
+  SliceChapterCleared,
 } from '../domain/slice/events.ts';
 import type { EntityType } from '../shared/streams.ts';
 
@@ -34,9 +36,10 @@ import type { EntityType } from '../shared/streams.ts';
  * The entity's own payload (F5): `fields` for the schema-bearing types
  * (businessFact, externalBusinessFact, command, readModel), `content` for
  * wireframes, `triggerConfig` for automations, `mapping` for translations.
+ * `mode` (F7) is readModel-only: projected (default) | live.
  */
 export type Definition =
-  | { fields: FieldDef[] }
+  | { fields: FieldDef[]; mode?: ReadModelMode }
   | { content: string }
   | { triggerConfig: TriggerConfig }
   | { mapping: Mapping };
@@ -52,6 +55,11 @@ export type CatalogEntry = {
    * lane-agnostic types. May dangle on an archived context (render falls back).
    */
   contextId?: string;
+  /**
+   * Assigned chapter (C1) — slices only (the band above the timeline). May
+   * dangle on an archived chapter (render falls back to "unchaptered").
+   */
+  chapterId?: string;
   /**
    * Global event-log position of the `*Defined` event — the model-wide creation
    * order the list endpoints sort by (palette order, W3 slice tiling). Optional:
@@ -73,7 +81,9 @@ export type CatalogEvent =
   | TranslationEvent
   | SliceDefined
   | SliceRenamed
-  | SliceArchived;
+  | SliceArchived
+  | SliceAssignedToChapter
+  | SliceChapterCleared;
 
 /**
  * Global position of a read event, as a JSON-safe number. The async consumer
@@ -134,13 +144,13 @@ export const evolveCatalog = (
     case 'CommandArchived':
       return document ? { ...document, archived: true } : null;
     case 'ReadModelDefined': {
-      const { modelId, entityId, name, fields } = event.data;
+      const { modelId, entityId, name, fields, mode } = event.data;
       return {
         _id: entityId,
         modelId,
         entityType: 'readModel',
         name,
-        definition: { fields },
+        definition: { fields, mode: mode ?? 'projected' },
         definedAtPosition: definedAt(event),
         archived: false,
       };
@@ -148,7 +158,12 @@ export const evolveCatalog = (
     case 'ReadModelRenamed':
       return document ? { ...document, name: event.data.name } : null;
     case 'ReadModelFieldsUpdated':
-      return document ? { ...document, definition: { fields: event.data.fields } } : null;
+      return document
+        ? {
+            ...document,
+            definition: { fields: event.data.fields, mode: event.data.mode ?? 'projected' },
+          }
+        : null;
     case 'ReadModelArchived':
       return document ? { ...document, archived: true } : null;
     case 'WireframeDefined': {
@@ -242,6 +257,10 @@ export const evolveCatalog = (
       return document ? { ...document, name: event.data.name } : null;
     case 'SliceArchived':
       return document ? { ...document, archived: true } : null;
+    case 'SliceAssignedToChapter':
+      return document ? { ...document, chapterId: event.data.chapterId } : null;
+    case 'SliceChapterCleared':
+      return document ? { ...document, chapterId: undefined } : null;
     default:
       return document;
   }
@@ -288,6 +307,8 @@ export const entityCatalogProjection = pongoMultiStreamProjection<
     'SliceDefined',
     'SliceRenamed',
     'SliceArchived',
+    'SliceAssignedToChapter',
+    'SliceChapterCleared',
   ],
   // Slice events key on `sliceId`; every other cataloged event on `entityId`.
   getDocumentId: (event) =>

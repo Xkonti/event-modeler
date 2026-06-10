@@ -130,6 +130,7 @@ export const modelApi =
 
     // The model's slices in creation order — the W3 canvas tiles boxes
     // left→right in exactly this order (decided 2026-06-09: creation order).
+    // `chapterId` (C1) drives the chapter band above the slice headers.
     router.get(
       '/models/:id/slices',
       async (req: Request, res: Response): Promise<void> => {
@@ -142,7 +143,7 @@ export const modelApi =
           });
         const dto = entries
           .sort(byDefinedAt)
-          .map(({ _id, name }) => ({ _id, name }));
+          .map(({ _id, name, chapterId }) => ({ _id, name, chapterId }));
         res.status(200).json(dto);
       },
     );

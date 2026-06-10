@@ -54,10 +54,29 @@ export type SliceArchived = Event<
   { modelId: string; sliceId: string }
 >;
 
+/**
+ * Chapter assignment (C1) — lives on the SLICE's stream, exactly like a fact's
+ * lane assignment lives on the fact (X1): the chapter is a property of the
+ * slice, last-write-wins on re-assign (E1 mirror). `previousChapterId` is
+ * stamped from state so per-chapter membership consumers see the chapter being
+ * vacated without replaying the whole stream.
+ */
+export type SliceAssignedToChapter = Event<
+  'SliceAssignedToChapter',
+  { modelId: string; sliceId: string; chapterId: string; previousChapterId?: string }
+>;
+
+export type SliceChapterCleared = Event<
+  'SliceChapterCleared',
+  { modelId: string; sliceId: string; previousChapterId?: string }
+>;
+
 export type SliceEvent =
   | SliceDefined
   | EntityPlaced
   | EntitySlotsSwapped
   | EntityRemovedFromSlice
   | SliceRenamed
-  | SliceArchived;
+  | SliceArchived
+  | SliceAssignedToChapter
+  | SliceChapterCleared;

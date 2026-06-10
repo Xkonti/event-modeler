@@ -66,6 +66,9 @@ const name = ref('')
 const nameError = ref('')
 const existingMatch = ref(null) // catalog entry colliding on normalized name
 const fields = ref([])
+// F7: read models only — 'projected' (built from feeding facts, default) or
+// 'live' (assembled from other read models; exempt from the A3 source check).
+const rmMode = ref('projected')
 const content = ref('')
 const triggerConfig = ref({ triggerType: 'interaction' })
 const mapping = ref({ direction: 'inbound', pairs: [] })
@@ -78,6 +81,7 @@ watch(
     name.value = e.name ?? ''
     const def = e.definition ?? {}
     if (def.fields) fields.value = def.fields.map((f) => ({ ...f }))
+    if (def.mode) rmMode.value = def.mode
     if (def.content !== undefined) content.value = def.content
     if (def.triggerConfig) triggerConfig.value = { ...def.triggerConfig }
     if (def.mapping) mapping.value = { direction: def.mapping.direction, pairs: (def.mapping.pairs ?? []).map((p) => ({ ...p })) }
@@ -87,13 +91,21 @@ watch(
 
 const cleanFields = () =>
   fields.value
-    .map((f) => ({ fieldName: f.fieldName.trim(), fieldType: f.fieldType.trim() }))
+    .map((f) => ({
+      fieldName: f.fieldName.trim(),
+      fieldType: f.fieldType.trim(),
+      ...(f.derived ? { derived: true } : {}),
+    }))
     .filter((f) => f.fieldName)
 
 const payloadVars = () => {
   switch (repo.payloadKind) {
     case 'fields':
-      return { fields: cleanFields() }
+      return {
+        fields: cleanFields(),
+        // F7: read models carry their mode alongside the fields payload.
+        ...(props.entityType === 'readModel' ? { mode: rmMode.value } : {}),
+      }
     case 'content':
       return { content: content.value }
     case 'triggerConfig':
@@ -289,6 +301,28 @@ async function onArchive() {
     </Button>
 
     <FieldsEditor v-if="repo.payloadKind === 'fields'" v-model:fields="fields" />
+
+    <!-- F7: read-model mode — projected (fed by facts) vs live (computed on demand) -->
+    <div v-if="entityType === 'readModel'" class="space-y-1.5">
+      <p class="text-sm font-medium text-gray-700">Mode</p>
+      <div class="flex gap-1.5" role="radiogroup" aria-label="Read model mode">
+        <button
+          v-for="m in ['projected', 'live']"
+          :key="m"
+          :data-testid="`rm-mode-${m}`"
+          class="rounded-md border px-2.5 py-1 text-xs"
+          :class="rmMode === m ? 'border-brand bg-brand/10 font-semibold text-brand' : 'border-gray-300 text-gray-500 hover:border-gray-400'"
+          :aria-checked="rmMode === m"
+          role="radio"
+          @click="rmMode = m"
+        >
+          {{ m }}
+        </button>
+      </div>
+      <p class="text-xs text-gray-400">
+        Live read models are assembled from other read models — validation does not expect feeding facts.
+      </p>
+    </div>
 
     <div v-else-if="repo.payloadKind === 'content'" class="space-y-1.5">
       <p class="text-sm font-medium text-gray-700">Content</p>

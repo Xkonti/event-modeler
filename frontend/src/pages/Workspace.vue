@@ -12,6 +12,13 @@ import { useModel, fetchModelValidation, exportModel } from '@/repositories/mode
 import { useCatalog } from '@/repositories/catalogRepository'
 import { useContexts } from '@/repositories/contextRepository'
 import {
+  useModelChapters,
+  useDefineChapter,
+  useAssignSliceChapter,
+  useClearSliceChapter,
+} from '@/repositories/chapterRepository'
+import { HttpError } from '@/lib/http'
+import {
   useModelSlices,
   useDefineSlice,
   useRenameSlice,
@@ -40,6 +47,7 @@ const { data: model } = useModel(() => modelId.value)
 const { data: slices } = useModelSlices(() => modelId.value)
 const { data: catalog } = useCatalog(() => modelId.value)
 const { data: contexts } = useContexts(() => modelId.value)
+const { data: chapters } = useModelChapters(() => modelId.value)
 
 // On-demand validation state (A2) — plain fetch, always fresh.
 const validationFindings = ref([])
@@ -123,6 +131,44 @@ async function onArchiveSlice({ sliceId }) {
   }
 }
 
+// --- chapter band (C1) ---------------------------------------------------------
+const defineChapter = useDefineChapter()
+const assignSliceChapter = useAssignSliceChapter()
+const clearSliceChapter = useClearSliceChapter()
+
+async function onAssignChapter({ sliceId, chapterId }) {
+  try {
+    if (chapterId === null) {
+      await clearSliceChapter.mutateAsync({ modelId: modelId.value, sliceId })
+    } else {
+      await assignSliceChapter.mutateAsync({ modelId: modelId.value, sliceId, chapterId })
+    }
+  } catch (err) {
+    reportMutationError(ui, router, err, 'Could not update the chapter.')
+  }
+}
+
+// "+ new chapter…" — define, then assign with the 422-retry projection-lag
+// accommodation (the assignment pre-check reads the async `chapters` RM).
+async function onCreateChapter({ sliceId, name }) {
+  const chapterId = crypto.randomUUID()
+  try {
+    await defineChapter.mutateAsync({ modelId: modelId.value, chapterId, name })
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await assignSliceChapter.mutateAsync({ modelId: modelId.value, sliceId, chapterId })
+        break
+      } catch (err) {
+        const transient = err instanceof HttpError && err.status === 422 && attempt < 8
+        if (!transient) throw err
+        await new Promise((r) => setTimeout(r, 250))
+      }
+    }
+  } catch (err) {
+    reportMutationError(ui, router, err, 'Could not create the chapter.')
+  }
+}
+
 // Ghost-slot click → place dialog scoped to that role.
 const placeDialog = ref(null) // { sliceId, role } | null
 function onAddEntity({ sliceId, role }) {
@@ -201,6 +247,7 @@ async function onExport() {
         :lanes-on="workspace.lanesVisible"
         :fields-on="workspace.fieldsVisible"
         :contexts="contexts ?? []"
+        :chapters="chapters ?? []"
         :selected-entity-id="workspace.selectedEntityId"
         :selected-relation-id="workspace.selectedRelationId"
         @select-entity="onSelectEntity"
@@ -213,6 +260,8 @@ async function onExport() {
         @draw-relation="onDrawRelation"
         @rename-slice="onRenameSlice"
         @archive-slice="onArchiveSlice"
+        @assign-chapter="onAssignChapter"
+        @create-chapter="onCreateChapter"
       />
 
       <div class="min-h-0 overflow-y-auto border-l border-gray-200 bg-white">

@@ -89,7 +89,10 @@ function pick(side, option) {
     <!-- inline fields (the fields layer) — visible without selecting anything -->
     <ul v-if="fields" :data-testid="`node-fields-${card.entityId}`" class="mt-1.5 space-y-0.5 border-t border-black/10 pt-1.5">
       <li v-for="f in fields" :key="f.fieldName" class="flex justify-between gap-2 font-mono text-[10px] leading-4 text-gray-600">
-        <span class="truncate">{{ f.fieldName }}</span>
+        <!-- ƒ marks a DERIVED field (F7): computed, exempt from the source check -->
+        <span class="truncate" :class="f.derived ? 'italic text-gray-500' : ''">
+          <span v-if="f.derived" class="mr-0.5 text-brand" title="Derived (computed)">ƒ</span>{{ f.fieldName }}
+        </span>
         <span class="shrink-0 text-gray-400">{{ f.fieldType }}</span>
       </li>
     </ul>

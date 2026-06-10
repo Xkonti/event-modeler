@@ -9,6 +9,7 @@ import type {
 } from '../../read/slicePlacements.ts';
 import type { RelationEdgeDoc } from '../../read/relationsGraph.ts';
 import type { ScenarioDoc } from '../../read/scenarios.ts';
+import type { ChapterDoc } from '../../read/chapters.ts';
 import { decide, type SliceCommand } from './slice.ts';
 import { handleSlice } from './commandHandler.ts';
 import type { Auth } from '../../auth/auth.ts';
@@ -133,6 +134,52 @@ export const sliceApi =
       },
     );
 
+    // C1: assign to a chapter (one per slice, LWW). Cross-stream pre-check
+    // against the async `chapters` read model (eventually consistent, same
+    // convention as placements/relations — clients retry 422).
+    router.put(
+      '/slices/:id/chapter',
+      guard,
+      async (req: Request, res: Response): Promise<void> => {
+        const sliceId = req.params.id;
+        const { chapterId } = req.body ?? {};
+        if (!sliceId || typeof chapterId !== 'string' || !chapterId) {
+          res.status(400).json({ error: 'missing sliceId or chapterId' });
+          return;
+        }
+        const [chapter, slice] = await Promise.all([
+          documents.collection<ChapterDoc>('chapters').findOne({ _id: chapterId }),
+          documents
+            .collection<SlicePlacementsDoc>('slice_placements')
+            .findOne({ _id: sliceId }),
+        ]);
+        if (!chapter || chapter.archived) {
+          res.status(422).json({ ok: false, error: 'chapter not found' });
+          return;
+        }
+        if (!slice || slice.archived) {
+          res.status(422).json({ ok: false, error: 'slice not found' });
+          return;
+        }
+        if (chapter.modelId !== slice.modelId) {
+          res
+            .status(422)
+            .json({ ok: false, error: 'chapter belongs to a different model' });
+          return;
+        }
+        await run(res, sliceId, {
+          type: 'AssignSliceToChapter',
+          data: { sliceId, chapterId },
+        });
+      },
+    );
+
+    router.delete('/slices/:id/chapter', guard, (req: Request, res: Response) => {
+      const sliceId = req.params.id;
+      if (!sliceId) return void res.status(400).json({ error: 'missing id' });
+      void run(res, sliceId, { type: 'ClearSliceChapter', data: { sliceId } });
+    });
+
     router.put('/slices/:id/name', guard, (req: Request, res: Response) => {
       const sliceId = req.params.id;
       if (!sliceId) return void res.status(400).json({ error: 'missing id' });
@@ -237,6 +284,7 @@ export const sliceApi =
           _id: slice._id,
           modelId: slice.modelId,
           name: slice.name,
+          chapterId: slice.chapterId,
           placements,
           relations,
           scenarios,

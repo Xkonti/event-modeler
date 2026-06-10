@@ -200,6 +200,20 @@ eventual-consistency window before the cascade completes. Cascade-driven `Remove
 dependent scenarios out-of-sync but does **not** prompt (the A1 prompt is user-driven only). Full GT
 scenarios: `spec/em-scenarios-results.md` § Entity Archive Cascade.
 
+**E4b — decomposed into TWO automations (2026-06-10 self-model test).** The cascade issues two
+command *types*, but an automation's anatomy (and the tool's `triggerConfig`) carries **one**
+`issuedCommandId` — and the es-book's Processor-Todo-List (ch 35) is one processor / one
+todo-list / one command type ("For each item on the Processor-Todo-List, the Processor will
+issue a 'Expire Todo' command"); fan-out is over list items, not command types. So the cascade
+is modeled as **two processors sharing the trigger**:
+- **Cascade Placements** — trigger `<T>Archived`; todo-list from `slice_placements`
+  (placements referencing the archived entity); issues `RemoveEntityFromSlice` per item.
+- **Cascade Relations** — trigger `<T>Archived`; todo-list from `relations_graph`
+  (edges touching the archived entity); issues `RemoveRelation` per item.
+`triggerConfig` stays single-command **deliberately** (rejected `issuedCommandIds[]` — it
+invites mushy do-everything processors, exactly what ch 35 decomposes away). One backend
+reactor MAY implement both — model ≠ deployment unit.
+
 ---
 
 # A3 — The completeness / validation walk  *(analysis; the signature feature)*
@@ -233,6 +247,10 @@ ANALYSIS  Model Validation                                 [on-demand read model
   meaningful **once fields are defined** (a deliberate later pass, `process-and-collaboration.md`),
   not from the first sticky. The structural model is valuable before fields exist; the check
   switches on when data does.
+- **Respects the derived markers (F7, em-commands).** Fields marked `derived` and read models
+  with `mode: live` are SKIPPED by `field-without-source` / `readmodel-without-source` (at most
+  an info-level "verify derivable from sourced events" — es-book ch 33's Logic-Read-Model rule).
+  Discovered 2026-06-10: validating the self-model produced 18 false positives without this.
 - **Decision to surface (D-validate):** on-demand only (v1) vs continuous background recompute
   with notifications (later); and **surfacing** — inline canvas red-arrows vs a report vs a
   punch-list (`notes/validation.md` open). **Lean: on-demand v1, inline red-arrow markers.**

@@ -170,8 +170,36 @@ describe('evolveCatalog', () => {
       modelId: M,
       entityType: 'readModel',
       name: 'Budget Summary',
-      definition: { fields: [{ fieldName: 'total', fieldType: 'money' }] },
+      // pre-F7 event carries no mode → catalog defaults to projected
+      definition: { fields: [{ fieldName: 'total', fieldType: 'money' }], mode: 'projected' },
       archived: false,
+    });
+  });
+
+  it('catalogs a live readModel mode (F7) and keeps it through FieldsUpdated', () => {
+    const created = evolveCatalog(
+      null,
+      ev({
+        type: 'ReadModelDefined',
+        data: { modelId: M, entityId: 'r2', name: 'model_export', fields: [], mode: 'live' },
+      }),
+    );
+    expect(created?.definition).toEqual({ fields: [], mode: 'live' });
+    const updated = evolveCatalog(
+      created,
+      ev({
+        type: 'ReadModelFieldsUpdated',
+        data: {
+          modelId: M,
+          entityId: 'r2',
+          fields: [{ fieldName: 'entities', fieldType: 'CatalogEntry[]', derived: true }],
+          mode: 'live',
+        },
+      }),
+    );
+    expect(updated?.definition).toEqual({
+      fields: [{ fieldName: 'entities', fieldType: 'CatalogEntry[]', derived: true }],
+      mode: 'live',
     });
   });
 

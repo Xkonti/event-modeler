@@ -4,6 +4,8 @@ import type { AppEventStore } from '../../eventStore.ts';
 import { documents } from '../../db.ts';
 import type { CatalogEntry } from '../../read/entityCatalog.ts';
 import { decide, type ReadModelCommand } from './readModel.ts';
+import type { ReadModelMode } from './events.ts';
+import { sanitizeFields } from '../../shared/fields.ts';
 import { handleReadModel } from './commandHandler.ts';
 import type { Auth } from '../../auth/auth.ts';
 import { requireAuth } from '../../auth/requireAuth.ts';
@@ -38,15 +40,30 @@ export const readModelApi =
       }
     };
 
+    // F7: `mode` is a closed two-value set — anything else is a client bug → 400.
+    const parseMode = (raw: unknown): ReadModelMode | null | undefined => {
+      if (raw === undefined) return undefined;
+      return raw === 'projected' || raw === 'live' ? raw : null;
+    };
+
     router.post('/read-models', guard, (req: Request, res: Response) => {
       const { modelId, entityId, name, fields } = req.body ?? {};
       if (typeof modelId !== 'string' || modelId.length === 0)
         return void res.status(400).json({ ok: false, error: 'modelId required' });
       if (typeof entityId !== 'string' || entityId.length === 0)
         return void res.status(400).json({ ok: false, error: 'entityId required' });
+      const mode = parseMode(req.body?.mode);
+      if (mode === null)
+        return void res.status(400).json({ ok: false, error: "mode must be 'projected' or 'live'" });
       void run(res, entityId, {
         type: 'DefineReadModel',
-        data: { modelId, entityId, name, fields: Array.isArray(fields) ? fields : [] },
+        data: {
+          modelId,
+          entityId,
+          name,
+          fields: sanitizeFields(fields),
+          ...(mode ? { mode } : {}),
+        },
       });
     });
 
@@ -63,9 +80,12 @@ export const readModelApi =
       const entityId = req.params.id;
       if (!entityId) return void res.status(400).json({ error: 'missing id' });
       const { fields } = req.body ?? {};
+      const mode = parseMode(req.body?.mode);
+      if (mode === null)
+        return void res.status(400).json({ ok: false, error: "mode must be 'projected' or 'live'" });
       void run(res, entityId, {
         type: 'UpdateReadModelFields',
-        data: { entityId, fields: Array.isArray(fields) ? fields : [] },
+        data: { entityId, fields: sanitizeFields(fields), ...(mode ? { mode } : {}) },
       });
     });
 

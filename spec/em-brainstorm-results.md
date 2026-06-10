@@ -148,6 +148,11 @@ row drop.
 - **Group Nested Under Parent** — a group is placed inside a higher-level group (builds the tree).
 - **Group Un-nested** — a group is detached from its parent.
 
+**C1 pull-forward (2026-06-10, self-model test):** a single-level **chapter band** ships ahead
+of the full hierarchy (es-book ch 18) — new facts: **Chapter Defined / Renamed / Archived**,
+**Slice Assigned To Chapter / Slice Chapter Cleared** (one chapter per slice, last-write-wins).
+When G1 lands, chapters become level-1 groups. See em-commands Flow 6 + em-structuring C1.
+
 ### Context / lane (#4)
 - **Context Defined** — a named stream/lane exists (a thing with its own story over time;
   maps to a bounded context *or* a single aggregate — the user's choice of granularity).

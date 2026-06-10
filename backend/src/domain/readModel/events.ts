@@ -10,10 +10,17 @@ import type { FieldDef } from '../../shared/fields.ts';
  *
  * Read models are LANE-AGNOSTIC (only facts get a Context). They hold their own
  * `fields` schema (decision #1/#7), edited via `ReadModelFieldsUpdated` (F5).
+ *
+ * `mode` (F7, es-book ch 30/31): `projected` = built from feeding facts (the
+ * default; absent on pre-F7 events ⇒ projected), `live` = assembled on demand
+ * from other read models / current state — the A3 completeness check skips
+ * `readmodel-without-source` for live read models. Descriptive, not guarded.
  */
+export type ReadModelMode = 'projected' | 'live';
+
 export type ReadModelDefined = Event<
   'ReadModelDefined',
-  { modelId: string; entityId: string; name: string; fields: FieldDef[] }
+  { modelId: string; entityId: string; name: string; fields: FieldDef[]; mode?: ReadModelMode }
 >;
 
 export type ReadModelRenamed = Event<
@@ -23,7 +30,7 @@ export type ReadModelRenamed = Event<
 
 export type ReadModelFieldsUpdated = Event<
   'ReadModelFieldsUpdated',
-  { modelId: string; entityId: string; fields: FieldDef[] }
+  { modelId: string; entityId: string; fields: FieldDef[]; mode?: ReadModelMode }
 >;
 
 export type ReadModelArchived = Event<

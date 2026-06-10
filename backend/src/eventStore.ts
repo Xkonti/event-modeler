@@ -3,6 +3,7 @@ import { getPostgreSQLEventStore } from '@event-driven-io/emmett-postgresql';
 import { connectionString } from './config.ts';
 import { entityNamesConstraint } from './constraints/entityNames.ts';
 import { contextNamesConstraint } from './constraints/contextNames.ts';
+import { chapterNamesConstraint } from './constraints/chapterNames.ts';
 import { relationPairsConstraint } from './constraints/relationPairs.ts';
 import { authUserEmailIndex } from './constraints/authUserEmailIndex.ts';
 import { authAccountIndex } from './constraints/authAccountIndex.ts';
@@ -22,6 +23,7 @@ export const createEventStore = (connectionStr: string) =>
     projections: projections.inline([
       entityNamesConstraint,
       contextNamesConstraint,
+      chapterNamesConstraint,
       relationPairsConstraint,
       authUserEmailIndex,
       authAccountIndex,

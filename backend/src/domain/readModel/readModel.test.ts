@@ -77,7 +77,7 @@ describe('readModel decider', () => {
       ]);
   });
 
-  it('updates fields with full-replace semantics', () => {
+  it('updates fields with full-replace semantics (mode preserved — F7)', () => {
     given([defined])
       .when({
         type: 'UpdateReadModelFields',
@@ -90,7 +90,37 @@ describe('readModel decider', () => {
             modelId: M,
             entityId: 'r1',
             fields: [{ fieldName: 'count', fieldType: 'number' }],
+            // pre-F7 define carried no mode → state defaulted to projected
+            mode: 'projected',
           },
+        },
+      ]);
+  });
+
+  it('defines a live read model (F7 mode passthrough)', () => {
+    given([])
+      .when({
+        type: 'DefineReadModel',
+        data: { modelId: M, entityId: 'r2', name: 'model_export', fields: [], mode: 'live' },
+      })
+      .then([
+        {
+          type: 'ReadModelDefined',
+          data: { modelId: M, entityId: 'r2', name: 'model_export', fields: [], mode: 'live' },
+        },
+      ]);
+  });
+
+  it('switches mode via UpdateReadModelFields (F7)', () => {
+    given([defined])
+      .when({
+        type: 'UpdateReadModelFields',
+        data: { entityId: 'r1', fields: defined.data.fields, mode: 'live' },
+      })
+      .then([
+        {
+          type: 'ReadModelFieldsUpdated',
+          data: { modelId: M, entityId: 'r1', fields: defined.data.fields, mode: 'live' },
         },
       ]);
   });

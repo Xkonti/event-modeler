@@ -1,5 +1,5 @@
 import { IllegalStateError, type Command } from '@event-driven-io/emmett';
-import type { ReadModelEvent } from './events.ts';
+import type { ReadModelEvent, ReadModelMode } from './events.ts';
 import { hasDuplicateFieldName, isBlank, type FieldDef } from '../../shared/fields.ts';
 
 /**
@@ -16,7 +16,14 @@ import { hasDuplicateFieldName, isBlank, type FieldDef } from '../../shared/fiel
 
 export type ReadModelEntity =
   | { status: 'empty' }
-  | { status: 'active'; modelId: string; entityId: string; name: string; fields: FieldDef[] }
+  | {
+      status: 'active';
+      modelId: string;
+      entityId: string;
+      name: string;
+      fields: FieldDef[];
+      mode: ReadModelMode;
+    }
   | { status: 'archived'; modelId: string; entityId: string };
 
 export const initialState = (): ReadModelEntity => ({ status: 'empty' });
@@ -25,7 +32,7 @@ export const initialState = (): ReadModelEntity => ({ status: 'empty' });
 
 export type DefineReadModel = Command<
   'DefineReadModel',
-  { modelId: string; entityId: string; name: string; fields: FieldDef[] }
+  { modelId: string; entityId: string; name: string; fields: FieldDef[]; mode?: ReadModelMode }
 >;
 export type RenameReadModel = Command<
   'RenameReadModel',
@@ -33,7 +40,7 @@ export type RenameReadModel = Command<
 >;
 export type UpdateReadModelFields = Command<
   'UpdateReadModelFields',
-  { entityId: string; fields: FieldDef[] }
+  { entityId: string; fields: FieldDef[]; mode?: ReadModelMode }
 >;
 export type ArchiveReadModel = Command<'ArchiveReadModel', { entityId: string }>;
 
@@ -53,11 +60,14 @@ export const decide = (
     case 'DefineReadModel': {
       if (state.status !== 'empty')
         throw new IllegalStateError('Read model already defined');
-      const { modelId, entityId, name, fields } = command.data;
+      const { modelId, entityId, name, fields, mode } = command.data;
       if (isBlank(name)) throw new IllegalStateError('Read model name must not be blank');
       if (hasDuplicateFieldName(fields))
         throw new IllegalStateError('Duplicate field name in definition');
-      return { type: 'ReadModelDefined', data: { modelId, entityId, name, fields } };
+      return {
+        type: 'ReadModelDefined',
+        data: { modelId, entityId, name, fields, ...(mode ? { mode } : {}) },
+      };
     }
     case 'RenameReadModel': {
       if (state.status !== 'active')
@@ -75,9 +85,16 @@ export const decide = (
       if (hasDuplicateFieldName(command.data.fields))
         throw new IllegalStateError('Duplicate field name in definition');
       // Full-replace semantics — the new list is the authoritative schema.
+      // `mode` omitted on the command = keep current; the event always carries
+      // the effective mode so projections fold without state.
       return {
         type: 'ReadModelFieldsUpdated',
-        data: { modelId: state.modelId, entityId: state.entityId, fields: command.data.fields },
+        data: {
+          modelId: state.modelId,
+          entityId: state.entityId,
+          fields: command.data.fields,
+          mode: command.data.mode ?? state.mode,
+        },
       };
     }
     case 'ArchiveReadModel': {
@@ -99,13 +116,16 @@ export const evolve = (
 ): ReadModelEntity => {
   switch (event.type) {
     case 'ReadModelDefined': {
-      const { modelId, entityId, name, fields } = event.data;
-      return { status: 'active', modelId, entityId, name, fields };
+      const { modelId, entityId, name, fields, mode } = event.data;
+      // Pre-F7 events carry no mode → projected.
+      return { status: 'active', modelId, entityId, name, fields, mode: mode ?? 'projected' };
     }
     case 'ReadModelRenamed':
       return state.status === 'active' ? { ...state, name: event.data.name } : state;
     case 'ReadModelFieldsUpdated':
-      return state.status === 'active' ? { ...state, fields: event.data.fields } : state;
+      return state.status === 'active'
+        ? { ...state, fields: event.data.fields, mode: event.data.mode ?? state.mode }
+        : state;
     case 'ReadModelArchived':
       return { status: 'archived', modelId: event.data.modelId, entityId: event.data.entityId };
   }

@@ -1,4 +1,5 @@
 import type { CatalogEntry } from './entityCatalog.ts';
+import type { ChapterDoc } from './chapters.ts';
 import type { ContextDoc } from './contexts.ts';
 import type { ModelDoc } from './models.ts';
 import type { RelationEdgeDoc } from './relationsGraph.ts';
@@ -22,6 +23,8 @@ export type ModelExport = {
   exportedAt: string;
   model: { id: string; name: string };
   contexts: Array<{ id: string; name: string }>;
+  /** C1 — band order = array order (creation order). */
+  chapters: Array<{ id: string; name: string }>;
   entities: Array<{
     id: string;
     entityType: string;
@@ -32,6 +35,7 @@ export type ModelExport = {
   slices: Array<{
     id: string;
     name?: string;
+    chapterId?: string;
     placements: Array<{ entityId: string; slotRole: string; slot?: number }>;
   }>;
   relations: Array<{
@@ -64,13 +68,22 @@ export const assembleExport = (input: {
   model: ModelDoc;
   entries: CatalogEntry[];
   contexts: ContextDoc[];
+  chapters?: ChapterDoc[];
   slices: SlicePlacementsDoc[];
   relations: RelationEdgeDoc[];
   scenarios: ScenarioDoc[];
   exportedAt: string;
 }): ModelExport => {
-  const { model, entries, contexts, slices, relations, scenarios, exportedAt } =
-    input;
+  const {
+    model,
+    entries,
+    contexts,
+    chapters = [],
+    slices,
+    relations,
+    scenarios,
+    exportedAt,
+  } = input;
 
   // Slices are cataloged for ordering but are containers, not entities — they
   // export under `slices` (from slice_placements), never under `entities`.
@@ -93,6 +106,15 @@ export const assembleExport = (input: {
       .filter((c) => !c.archived)
       .sort(byId)
       .map(({ _id, name }) => ({ id: _id, name })),
+    chapters: chapters
+      .filter((c) => !c.archived)
+      .sort(
+        (a, b) =>
+          (a.definedAtPosition ?? Number.MAX_SAFE_INTEGER) -
+            (b.definedAtPosition ?? Number.MAX_SAFE_INTEGER) ||
+          a._id.localeCompare(b._id),
+      )
+      .map(({ _id, name }) => ({ id: _id, name })),
     entities: entityEntries.map(
       ({ _id, entityType, name, definition, contextId }) => ({
         id: _id,
@@ -113,6 +135,7 @@ export const assembleExport = (input: {
       .map((s) => ({
         id: s._id,
         ...(s.name !== undefined ? { name: s.name } : {}),
+        ...(s.chapterId !== undefined ? { chapterId: s.chapterId } : {}),
         placements: s.placements.map(({ placedEntityId, slotRole, slot }) => ({
           entityId: placedEntityId,
           slotRole,

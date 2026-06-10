@@ -131,6 +131,33 @@ describe('assembleExport', () => {
     ]);
   });
 
+  it('exports chapters in creation order + chapterId on slices (C1)', () => {
+    const out = assembleExport({
+      ...baseInput,
+      chapters: [
+        { _id: 'ch-late', modelId: M, name: 'Rules', archived: false, definedAtPosition: 20 },
+        { _id: 'ch-early', modelId: M, name: 'Setup', archived: false, definedAtPosition: 5 },
+        { _id: 'ch-gone', modelId: M, name: 'Old', archived: true, definedAtPosition: 1 },
+      ],
+      slices: [
+        {
+          _id: 's1',
+          modelId: M,
+          name: 'Create Model',
+          chapterId: 'ch-early',
+          placements: [],
+          archived: false,
+        },
+      ],
+      entries: [entry({ _id: 's1', entityType: 'slice' })],
+    });
+    expect(out.chapters).toEqual([
+      { id: 'ch-early', name: 'Setup' },
+      { id: 'ch-late', name: 'Rules' },
+    ]);
+    expect(out.slices[0]?.chapterId).toBe('ch-early');
+  });
+
   it('exports relations with stored kind + meta, sorted by id', () => {
     const out = assembleExport({
       ...baseInput,

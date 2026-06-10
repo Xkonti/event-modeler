@@ -4,6 +4,7 @@ import type { AppEventStore } from '../../eventStore.ts';
 import { documents } from '../../db.ts';
 import type { CatalogEntry } from '../../read/entityCatalog.ts';
 import { decide, type CommandCommand } from './command.ts';
+import { sanitizeFields } from '../../shared/fields.ts';
 import { handleCommand } from './commandHandler.ts';
 import type { Auth } from '../../auth/auth.ts';
 import { requireAuth } from '../../auth/requireAuth.ts';
@@ -45,7 +46,7 @@ export const commandApi =
         return void res.status(400).json({ ok: false, error: 'entityId required' });
       void run(res, entityId, {
         type: 'DefineCommand',
-        data: { modelId, entityId, name, fields: Array.isArray(fields) ? fields : [] },
+        data: { modelId, entityId, name, fields: sanitizeFields(fields) },
       });
     });
 
@@ -64,7 +65,7 @@ export const commandApi =
       const { fields } = req.body ?? {};
       void run(res, entityId, {
         type: 'UpdateCommandFields',
-        data: { entityId, fields: Array.isArray(fields) ? fields : [] },
+        data: { entityId, fields: sanitizeFields(fields) },
       });
     });
 

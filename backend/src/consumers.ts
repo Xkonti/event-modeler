@@ -5,6 +5,7 @@ import { entityCatalogProjection } from './read/entityCatalog.ts';
 import { slicePlacementsProjection } from './read/slicePlacements.ts';
 import { relationsGraphProjection } from './read/relationsGraph.ts';
 import { contextsProjection } from './read/contexts.ts';
+import { chaptersProjection } from './read/chapters.ts';
 import { scenariosProjection } from './read/scenarios.ts';
 import { registerArchiveCascade } from './reactors/archiveCascade.ts';
 
@@ -39,6 +40,7 @@ export const startConsumers = (): PostgreSQLEventStoreConsumer => {
   consumer.projector({ projection: slicePlacementsProjection, lock });
   consumer.projector({ projection: relationsGraphProjection, lock });
   consumer.projector({ projection: contextsProjection, lock });
+  consumer.projector({ projection: chaptersProjection, lock });
   consumer.projector({ projection: scenariosProjection, lock });
 
   // A1: the entity-archive cascade reactor (E4) — issues RemoveEntityFromSlice

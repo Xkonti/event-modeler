@@ -12,6 +12,7 @@ import { wireframeApi } from '../domain/wireframe/api.ts';
 import { externalBusinessFactApi } from '../domain/externalBusinessFact/api.ts';
 import { relationApi } from '../domain/relation/api.ts';
 import { contextApi } from '../domain/context/api.ts';
+import { chapterApi } from '../domain/chapter/api.ts';
 import { automationApi } from '../domain/automation/api.ts';
 import { translationApi } from '../domain/translation/api.ts';
 import { scenarioApi } from '../domain/scenario/api.ts';
@@ -72,6 +73,7 @@ export const buildAuthApp = ({
     externalBusinessFactApi(eventStore, auth),
     relationApi(eventStore, auth),
     contextApi(eventStore, auth),
+    chapterApi(eventStore, auth),
     automationApi(eventStore, auth),
     translationApi(eventStore, auth),
     scenarioApi(eventStore, auth),

@@ -289,4 +289,62 @@ describe('slice decider', () => {
       })
       .thenThrows();
   });
+
+  // C1 — chapter assignment (one per slice, last-write-wins; X1/E1 mirror)
+  it('assigns an active slice to a chapter (C1)', () => {
+    given([defined])
+      .when({ type: 'AssignSliceToChapter', data: { sliceId: 's1', chapterId: 'ch1' } })
+      .then([
+        {
+          type: 'SliceAssignedToChapter',
+          data: { modelId: M, sliceId: 's1', chapterId: 'ch1' },
+        },
+      ]);
+  });
+
+  it('re-assigns last-write-wins, stamping previousChapterId (C1/E1)', () => {
+    given([
+      defined,
+      {
+        type: 'SliceAssignedToChapter',
+        data: { modelId: M, sliceId: 's1', chapterId: 'ch1' },
+      },
+    ])
+      .when({ type: 'AssignSliceToChapter', data: { sliceId: 's1', chapterId: 'ch2' } })
+      .then([
+        {
+          type: 'SliceAssignedToChapter',
+          data: { modelId: M, sliceId: 's1', chapterId: 'ch2', previousChapterId: 'ch1' },
+        },
+      ]);
+  });
+
+  it('clears an assigned chapter (C1)', () => {
+    given([
+      defined,
+      {
+        type: 'SliceAssignedToChapter',
+        data: { modelId: M, sliceId: 's1', chapterId: 'ch1' },
+      },
+    ])
+      .when({ type: 'ClearSliceChapter', data: { sliceId: 's1' } })
+      .then([
+        {
+          type: 'SliceChapterCleared',
+          data: { modelId: M, sliceId: 's1', previousChapterId: 'ch1' },
+        },
+      ]);
+  });
+
+  it('rejects clearing when no chapter is assigned (C1)', () => {
+    given([defined])
+      .when({ type: 'ClearSliceChapter', data: { sliceId: 's1' } })
+      .thenThrows();
+  });
+
+  it('rejects assigning an archived slice to a chapter (G-C5)', () => {
+    given([defined, { type: 'SliceArchived', data: { modelId: M, sliceId: 's1' } }])
+      .when({ type: 'AssignSliceToChapter', data: { sliceId: 's1', chapterId: 'ch1' } })
+      .thenThrows();
+  });
 });

@@ -61,7 +61,7 @@ Four error/rule decisions confirmed by the user 2026-06-08 (they shape outcomes 
 | **E1** | **Lane re-assign = last-write-wins** | `AssignBusinessFactToContext` on an already-laned fact **reassigns** (B replaces A); no Clear needed first. |
 | **E2** | **Structural failures = command rejection** | Dup name, invalid relation pair, wrong-type lane assign, cross-band placement, 2nd command in a slice → **reject** (THEN: error). Explicit **failure facts** reserved for cross-system flows (`ModelImportFailed`, `ModelPublishFailed`). |
 | **E3** | **Duplicate relation = reject** | `DrawRelation` with an existing `(fromId,toId,kind)` → reject ("relation already exists"). Relations have no name, so this is the one relation uniqueness rule. |
-| **E4** | **Archive = cascade cleanup** | `<T>Archived` **triggers an automation** that fan-out-removes every placement + relation of the entity (`RemoveEntityFromSlice` / `RemoveRelation`). **Supersedes em-automations A2's read-time-ghost-drop lean** — see *Automations § Entity Archive Cascade*. Ghost-drop remains only as a render-time safety net. |
+| **E4** | **Archive = cascade cleanup** | `<T>Archived` **triggers an automation** that fan-out-removes every placement + relation of the entity (`RemoveEntityFromSlice` / `RemoveRelation`). **Supersedes em-automations A2's read-time-ghost-drop lean** — see *Automations § Entity Archive Cascade*. Ghost-drop remains only as a render-time safety net. **E4b (2026-06-10):** modeled as TWO automations — *Cascade Placements* + *Cascade Relations* — one issued command type per processor (es-book ch 35, Processor-Todo-List); see em-automations § A2/E4b. |
 
 ---
 
@@ -871,6 +871,10 @@ scenarios
 ### AUTOMATION  Entity Archive Cascade  ★ supersedes em-automations A2  [automation → G/T]
 ```
 DECISION E4: archiving an entity TRIGGERS this cascade (chosen over read-time ghost-drop).
+DECISION E4b (2026-06-10): TWO automations, one issued command type each (es-book ch 35):
+  - Cascade Placements: reads slice_placements, issues RemoveEntityFromSlice per placement
+  - Cascade Relations:  reads relations_graph,  issues RemoveRelation per edge
+  (scenarios below span both; one backend reactor may implement both — model ≠ deployment)
 trigger      <T>Archived fact (any catalog entity)
 reads        slice_placements + relations_graph for refs to the archived entityId
 issues       RemoveEntityFromSlice (per placement) + RemoveRelation (per relation) — fan-out
@@ -904,6 +908,13 @@ GT  GIVEN ScenarioDefined(sc-1 refs bf-line), BusinessFactArchived(bf-line)
 ```
 - Read-only graph analyses; record NO facts; advisory; cycle-guard MANDATORY (graph is cyclic).
 A3 GT (completeness) — see model_validation above.
+A3 GT (derived markers, F7)
+   GIVEN ReadModelDefined(rm-models, fields:[{name}, {sliceCount, derived:true}]), no fact feeds sliceCount
+       THEN model_validation: NO field-without-source for sliceCount (derived → skipped; at most info)
+   GIVEN ReadModelDefined(rm-export, mode:'live'), zero feeds relations
+       THEN model_validation: NO readmodel-without-source for rm-export (live → skipped)
+   GIVEN ReadModelDefined(rm-list, mode:'projected'), zero feeds relations
+       THEN model_validation: readmodel-without-source FLAGGED (projected with no source = real gap)
 A5 GT  GIVEN RelationDrawn(rel-feed: bf-line→rm-summary), RelationDrawn(rel-prod: cmd-record→bf-line)
            THEN where-used(bf-line) = {fed-by: cmd-record (via produces), feeds: rm-summary (via feeds)}
            (cycle-guarded traversal; grayed-preview neighborhood — navigation-and-scoping.md)

@@ -1,7 +1,9 @@
 <script setup>
 // VIEW (inspector) — the fields grid for schema-bearing types (fact / external
 // fact / command / read model). Field TYPES are free-form text (O4 — no enum,
-// the completeness check is semantic). v-model:fields = [{fieldName, fieldType}].
+// the completeness check is semantic). The ƒ toggle marks a field DERIVED
+// (F7): computed from state already in the system, skipped by validation.
+// v-model:fields = [{fieldName, fieldType, derived?}].
 const fields = defineModel('fields', { type: Array, default: () => [] })
 
 function addRow() {
@@ -38,6 +40,16 @@ function update(i, key, value) {
         class="w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-brand focus:outline-none"
         @input="update(i, 'fieldType', $event.target.value)"
       />
+      <button
+        :data-testid="`field-derived-${i}`"
+        class="rounded px-1 font-mono text-xs"
+        :class="field.derived ? 'bg-brand/10 text-brand' : 'text-gray-300 hover:bg-gray-100 hover:text-gray-500'"
+        :title="field.derived ? 'Derived (computed — exempt from the source check). Click to unmark.' : 'Mark as derived (computed, no upstream source expected)'"
+        :aria-pressed="!!field.derived"
+        @click="update(i, 'derived', !field.derived)"
+      >
+        ƒ
+      </button>
       <button
         class="rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
         title="Remove field"

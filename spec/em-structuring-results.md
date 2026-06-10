@@ -94,9 +94,10 @@ scenarios become its tests.** Chunks are ordered so each only depends on already
 | **S1** | slice + placement | `DefineSlice/Rename/Archive`, `PlaceEntity/SwapEntitySlots/RemoveEntityFromSlice` | (feeds S2) | F0, catalog | ✅ core |
 | **S2** | slice_canvas (the money RM) | — (read model only) | `slice_canvas` | S1, entity_catalog, R1, V1 | ✅ core |
 | **V1** | scenarios (GWT/GT) | `DefineScenario/UpdateScenario/ArchiveScenario` | `scenarios` (F6 indexed) | F0, E1/E2/E3/E6 (soft) | ✅ core |
-| **A1** | entity archive cascade *(automation)* | issues `RemoveEntityFromSlice`/`RemoveRelation` (fan-out) | — | E1–E7, S1, R1 | ✅ core (E4) |
-| **A2** | validation + where-used *(analysis)* | — | `model_validation` (+ neighborhood) | read models | ◑ v1 on-demand |
-| **G1** | grouping / hierarchy | `ConfigureGroupingHierarchy`, `CreateGroup/…`, `AssignSliceToGroup/…`, `NestGroupUnderParent/…` | `groups` | F0, S1 | ⏳ later |
+| **A1** | entity archive cascade *(automation)* — **E4b: modeled as TWO automations** (Cascade Placements / Cascade Relations, one issued command type each — es-book ch 35) | issues `RemoveEntityFromSlice`/`RemoveRelation` (fan-out) | — | E1–E7, S1, R1 | ✅ core (E4) |
+| **A2** | validation + where-used *(analysis)* — **respects F7 derived/live markers** | — | `model_validation` (+ neighborhood) | read models | ◑ v1 on-demand |
+| **C1** | chapter band *(thin G1 slice — pulled forward 2026-06-10)* | `DefineChapter/Rename/Archive`, `AssignSliceToChapter/Clear` | `chapters` | F0, S1 | ◔ next (pre-G1) |
+| **G1** | grouping / hierarchy *(C1's chapters become level-1)* | `ConfigureGroupingHierarchy`, `CreateGroup/…`, `AssignSliceToGroup/…`, `NestGroupUnderParent/…` | `groups` | F0, S1, C1 | ⏳ later |
 | **P1** | publishing / sync | `ImportModel`, `ExportModel`(query), `PublishModel` | `model_export`, `publish_diff` | whole model | ⏳ later |
 | **AUTH** | identity / access | `Register/VerifyEmail/LogIn/LogOut/DeleteAccount` | `session`/`user` | — (own context) | 🔒 built |
 | **AI** | MCP participation | *(reuses every command above)* | reads AI-semantic export | P1 (export), all commands | ⏳ later |
@@ -125,8 +126,10 @@ scenarios become its tests.** Chunks are ordered so each only depends on already
    entities (E3/E2/E5) exist so the trigger/mapping refs resolve.
 10. **A1 archive cascade** — needs placements (S1) + relations (R1) to clean.
 11. **A2 validation / where-used** — read-only analyses over the now-complete read models.
-12. **G1 grouping** *(later)* · **P1 publishing/sync** *(later — serializes the whole model)* ·
-    **AI** *(later — MCP transport over the existing command surface)*.
+12. **C1 chapter band** *(next — the first organize affordance; thin G1 slice, pulled forward
+    2026-06-10)*.
+13. **G1 grouping** *(later — C1's chapters become level-1)* · **P1 publishing/sync** *(later —
+    serializes the whole model)* · **AI** *(later — MCP transport over the existing command surface)*.
 
 > **Each chunk's Phase-5 scenarios are its acceptance tests.** E.g. E1 is "done" when the
 > `DefineBusinessFact` GWTs (happy, dup-name reject, blank reject, archived-name-freed, …) pass.
@@ -171,6 +174,12 @@ Modeling › [ Setup | Catalog | Streams | Assembly | Rules | Organize* | Share*
 
 | Chapter | Slices | Chunk(s) |
 |---|---|---|
+> **C1 pull-forward (2026-06-10 self-model test):** the self-model could not express this very
+> chapter band in-tool (Setup | Catalog | … unrepresentable; G1 was all-later). A single-level
+> chapter vertical (C1, em-commands Flow 6) is pulled forward; full G1 hierarchy stays later
+> with chapters becoming level-1. Also noted: slices tile in creation order only — a reorder
+> primitive (`MoveSliceAfter`) joins the backlog for when models grow non-linearly.
+
 | **Setup** | Create Model · (Configure Hierarchy) | F0 (·G1) |
 | **Catalog** | Define <type> ×7 · Update fields/content · Rename · Archive | E1–E7 |
 | **Streams** | Define Context · Assign / Clear lane | X1 |
@@ -242,6 +251,10 @@ candidates, not whiteboard hand-drawing.
 | Structural rejections | **GWTs**, not models |
 | Element links | **dropped** — subsumed by ID identity (brainstorm C) |
 | Backlinks | **kept** for publish back-channel + derived recompute (dotted) |
+| F7 derived markers (`FieldDef.derived`, readModel `mode: projected\|live`) | **decided 2026-06-10** (self-model test: 18 A2 false positives; es-book ch 30/31/33) — em-commands F7 |
+| E4b cascade = two automations (one issued command type each) | **decided 2026-06-10** (es-book ch 35) — em-automations § A2 |
+| C1 chapter band pulled forward (thin G1 slice) | **decided 2026-06-10** — em-commands Flow 6; G1 builds on it |
+| Slice/entity name namespaces | **already split** (G-C2: slices not in `entity_names`) — confirmed, no change |
 
 ---
 
@@ -270,9 +283,12 @@ These don't block the chunking; resolve as the relevant chunk is built:
   slices→chapters, contexts→models), with error flows isolated and a de-collided legend.
 - **The model is now divided into ~18 focusable implementation chunks** with an explicit
   dependency order; each maps to one ES vertical and is tested by its Phase-5 scenarios.
-- **v1-core build path:** F0 → E1…E7 → X1 → R1 → S1 → V1 → S2 → A1 (→ A2). **Later:** G1, P1, AI.
+- **v1-core build path:** F0 → E1…E7 → X1 → R1 → S1 → V1 → S2 → A1 (→ A2). **Next:** F7 derived
+  markers + E4b split + C1 chapters (2026-06-10 self-model test findings). **Later:** G1, P1, AI.
   **Built:** AUTH.
 - The model is the **living spec** feeding implementation. Re-run structuring as an organize pass
   whenever it grows.
-- **Pending (unchanged from em-commands/scenarios):** reflect **F1–F6 + G1/G3 + E1–E4 + new facts**
-  into `notes/` and the **backend** (event shapes change) before/at implementation start.
+- ~~Pending: reflect F1–F6 + G1/G3 + E1–E4 + new facts into `notes/` and the backend~~ —
+  **DONE** (backend implemented 2026-06-09; notes reconciled by 2026-06-10).
+- **Pending (2026-06-10):** implement **F7 → E4b → C1** (plan: `spec/build-plan-f7-e4b-c1.md`);
+  `notes/` already reconciled to all three.

@@ -16,6 +16,7 @@ export type EntityType =
   | 'automation'
   | 'translation'
   | 'context'
+  | 'chapter'
   | 'slice'
   | 'relation'
   | 'scenario'
@@ -67,6 +68,9 @@ export const translationStreamId = (id: string): string => streamId('translation
 
 /** One stream per context (swimlane): `context-{contextId}`. */
 export const contextStreamId = (id: string): string => streamId('context', id);
+
+/** One stream per chapter (C1 organizing band): `chapter-{chapterId}`. */
+export const chapterStreamId = (id: string): string => streamId('chapter', id);
 
 /** One stream per scenario (GWT/GT rule): `scenario-{scenarioId}`. */
 export const scenarioStreamId = (id: string): string => streamId('scenario', id);

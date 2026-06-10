@@ -114,8 +114,9 @@ SLICE  Entity Catalog                        [state view]
 ```
 
 **Per-type `definition` payload:**
-- businessFact / command / readModel / externalBusinessFact → `fields: [{fieldName, fieldType}]`
-  (`fieldType` = **free-form text**, not a fixed enum — O4).
+- businessFact / command / readModel / externalBusinessFact → `fields: [{fieldName, fieldType, derived?}]`
+  (`fieldType` = **free-form text**, not a fixed enum — O4; `derived` — F7 below).
+- readModel additionally carries `mode ∈ projected | live` (default `projected`) — F7.
 - wireframe → `content` (layout/text); edited via `UpdateWireframeContent` → *WireframeContentUpdated*.
 - automation → `triggerConfig { triggerType ∈ fact|timer|interaction, monitoredReadModelId?, issuedCommandId? }`.
 - translation → `mapping { direction ∈ inbound|outbound, pairs: [{externalField, internalField}] }`.
@@ -142,6 +143,27 @@ Defined/Renamed/Archived — but `triggerConfig` and `mapping` are editable. **A
 `ReconfigureAutomation` → *AutomationReconfigured* and `UpdateTranslationMapping` →
 *TranslationMappingUpdated* (the analog of FieldsUpdated). **Resolved** in the **em-automations**
 phase (G3); recorded here so the catalog has an edit path.
+
+**Discovered — F7 (derived markers — make the D-derived tag a tool affordance).** _[2026-06-10
+self-model test: building the EventModeler model of itself via the API produced 18 advisory
+false positives from A3 validation — every projection-computed field (`sliceCount`, `archived`,
+`outOfSync`, `factCount`, …) flagged `field-without-source`, and the read-over-read-model
+read models (`model_export`, `model_validation`, `where_used`) flagged
+`readmodel-without-source`.]_ The es-book distinguishes exactly these cases: **Logic Read Model**
+(ch 33 — calculated attributes are legitimate iff computed only from state already in the
+system) and **Database Projected vs Live Model** (ch 30/31 — projected-from-facts vs
+computed-on-demand are distinct patterns). The spec's own "DERIVED fields" tag (Gap/Fix log)
+had no in-tool representation. **FIX:**
+- `FieldDef` gains optional **`derived: boolean`** (any entity type — facts use it for
+  decider-computed attributes like `slotRole`, read models for calculated attributes).
+  Validation (A3) skips `field-without-source` for derived fields; optionally emits an
+  info-level "verify derivable from sourced events" (the ch 33 rule). Never a gap finding.
+- readModel definitions gain **`mode: 'projected' | 'live'`** (default `projected`).
+  `live` = assembled on demand from other read models / current state (book Live Model);
+  A3 skips `readmodel-without-source` for live read models. A `projected` read model with
+  zero feeding facts stays a real finding. Editable via `UpdateReadModelFields { fields, mode? }`.
+(Amends `shared/fields.ts`, `readModel/events.ts` + api, `read/entityCatalog.ts` definition
+payload, `read/modelValidation.ts`.)
 
 **Resolved — O4 (field type).** `fieldType` is **free-form text** (not a fixed enum). Decided by the
 user 2026-06-08. Rationale: simpler in ES — no enum migration / event upcasting when the type
@@ -384,6 +406,33 @@ Mostly UI-sourced, no deep data gaps. Completeness notes: `level` must be one of
 levels (eventually-consistent check vs the hierarchy config); a slice/entity may belong to
 several groups (graph membership, not a tree). Full treatment deferred with the structuring phase.
 
+**Pulled forward — C1 chapter band (thin G1 slice, 2026-06-10 self-model test).** The self-model
+could not express its own Setup | Catalog | Streams | Assembly | Rules story — the es-book's
+primary readability tool (ch 18: chapters/sub-chapters band above the timeline). Full G1 stays
+later; a single-level chapter band is pulled forward as its own small vertical:
+
+```
+SLICE  Define / Rename / Archive Chapter      [state change]
+  command  DefineChapter { modelId, chapterId, name } → ChapterDefined
+           RenameChapter → ChapterRenamed ;  ArchiveChapter → ChapterArchived
+  sources  chapterId ← generated;  name ← UI
+
+SLICE  Assign Slice To Chapter                [state change]
+  command  AssignSliceToChapter { modelId, sliceId, chapterId } → SliceAssignedToChapter
+           ClearSliceChapter { modelId, sliceId } → SliceChapterCleared
+  rules    one chapter per slice (last-write-wins, mirrors lane re-assign E1);
+           chapters are ORDERED (creation order v1; reorder primitive later)
+
+SLICE  Chapters Band                          [state view]
+  read model  chapters { chapterId, modelId, name, archived, sliceIds[] }
+  fed by      Chapter*, SliceAssignedToChapter/Cleared
+  gaps        —
+```
+
+Maps onto G1 later as **level-1 of the configured hierarchy** — additive, not throwaway.
+Related (noted, still later): slices render in creation order only; a reorder primitive
+(`MoveSliceAfter`, analogous to F3's slot swap) is needed once models grow non-linearly.
+
 ---
 
 # Flow 7 — Publish / Export / Import  *(later-stage; automation + translation slices)*
@@ -522,6 +571,7 @@ facts, O1/O2 publish/import semantics) — **all now resolved in `em-automations
 | **F4** | `RelationDrawn` stores `{ kind, meta }`; `relations_graph` stores kind (was derived) | `relation/events.ts`, `read/relationsGraph.ts`, `slice/api.ts` |
 | **F5** | `entity_catalog` carries the `definition` payload (fields/content) + `contextId` | `read/entityCatalog.ts` |
 | **F6** | `scenarios` read model indexed by anchorId **and** every referencedEntityId (auto-surface) | new read model |
+| **F7** | Derived markers: `FieldDef.derived?` + readModel `mode: projected\|live`; A3 validation skips derived fields + live read models (2026-06-10 self-model test; es-book ch 30/31/33) | `shared/fields.ts`, `readModel/events.ts`, catalog, `read/modelValidation.ts` |
 
 **Decisions (G1/G3/O1/O2 RESOLVED in `em-automations-results.md`; O4/O5 RESOLVED by the user 2026-06-08):**
 
@@ -537,7 +587,8 @@ facts, O1/O2 publish/import semantics) — **all now resolved in `em-automations
 **DERIVED fields (no source fact — tag so the check doesn't chase phantoms):**
 `models.sliceCount`, `models.lastEditedAt`, `contexts.factCount`, `publish_diff.changeCount` /
 `lastPublishedMarker`, `scenarios.outOfSync`, `slice_canvas` ghost-dropping. These are
-projections/metadata computations, not holes.
+projections/metadata computations, not holes. **As of F7 this tag is expressible in-tool:**
+mark the field `derived` (or the read model `mode: live`) and the A3 check skips it.
 
 **Identifiers threading (verified end-to-end):** `modelId` (all), `entityId` (catalog ⋈
 placements ⋈ relations ⋈ scenarios), `sliceId` (slice ⋈ placements ⋈ groups), `contextId`
@@ -556,5 +607,6 @@ later-phase wiring, not missing sources.
 - **Later-stage flows (6–7):** groups → structuring phase; **publish/import fully resolved in
   `em-automations-results.md`** (T1/T3; G1/G3/O1/O2 closed).
 - Next: **em-scenarios** (attach GWT/GT business rules with concrete example data per slice) —
-  the `scenarios` read model + W8 are already shaped for it. Still pending: reflect the
-  **F1–F6 + G1/G3 changes into `notes/` + the backend**, since they change real event shapes.
+  the `scenarios` read model + W8 are already shaped for it. ~~Still pending: reflect the
+  F1–F6 + G1/G3 changes into `notes/` + the backend~~ — **DONE** (backend 2026-06-09, notes by
+  2026-06-10). **F7** (above) is the open event-shape change; plan: `spec/build-plan-f7-e4b-c1.md`.

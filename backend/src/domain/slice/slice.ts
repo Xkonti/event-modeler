@@ -36,6 +36,8 @@ export type Slice =
       sliceId: string;
       name?: string;
       placements: Placement[];
+      /** C1: the chapter this slice sits under (one per slice, LWW). */
+      chapterId?: string;
     }
   | { status: 'archived'; modelId: string; sliceId: string };
 
@@ -61,6 +63,11 @@ export type RemoveEntityFromSlice = Command<
 >;
 export type RenameSlice = Command<'RenameSlice', { sliceId: string; name: string }>;
 export type ArchiveSlice = Command<'ArchiveSlice', { sliceId: string }>;
+export type AssignSliceToChapter = Command<
+  'AssignSliceToChapter',
+  { sliceId: string; chapterId: string }
+>;
+export type ClearSliceChapter = Command<'ClearSliceChapter', { sliceId: string }>;
 
 export type SliceCommand =
   | DefineSlice
@@ -68,7 +75,9 @@ export type SliceCommand =
   | SwapEntitySlots
   | RemoveEntityFromSlice
   | RenameSlice
-  | ArchiveSlice;
+  | ArchiveSlice
+  | AssignSliceToChapter
+  | ClearSliceChapter;
 
 // --- Decide --------------------------------------------------------------
 
@@ -160,6 +169,34 @@ export const decide = (command: SliceCommand, state: Slice): SliceEvent => {
         data: { modelId: state.modelId, sliceId: state.sliceId },
       };
     }
+    case 'AssignSliceToChapter': {
+      // C1: last-write-wins (E1 mirror) — re-assign needs no prior Clear.
+      if (state.status !== 'active')
+        throw new IllegalStateError('Can only assign an active slice to a chapter');
+      return {
+        type: 'SliceAssignedToChapter',
+        data: {
+          modelId: state.modelId,
+          sliceId: state.sliceId,
+          chapterId: command.data.chapterId,
+          ...(state.chapterId ? { previousChapterId: state.chapterId } : {}),
+        },
+      };
+    }
+    case 'ClearSliceChapter': {
+      if (state.status !== 'active')
+        throw new IllegalStateError('Can only clear the chapter of an active slice');
+      if (!state.chapterId)
+        throw new IllegalStateError('Slice has no chapter to clear');
+      return {
+        type: 'SliceChapterCleared',
+        data: {
+          modelId: state.modelId,
+          sliceId: state.sliceId,
+          previousChapterId: state.chapterId,
+        },
+      };
+    }
   }
 };
 
@@ -223,5 +260,11 @@ export const evolve = (state: Slice, event: SliceEvent): Slice => {
         : state;
     case 'SliceArchived':
       return { status: 'archived', modelId: event.data.modelId, sliceId: event.data.sliceId };
+    case 'SliceAssignedToChapter':
+      return state.status === 'active'
+        ? { ...state, chapterId: event.data.chapterId }
+        : state;
+    case 'SliceChapterCleared':
+      return state.status === 'active' ? { ...state, chapterId: undefined } : state;
   }
 };

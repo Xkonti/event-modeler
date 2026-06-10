@@ -28,6 +28,7 @@ const props = defineProps({
   lanesOn: { type: Boolean, default: false },
   fieldsOn: { type: Boolean, default: true },
   contexts: { type: Array, default: () => [] }, // [{_id, name}] for lane labels
+  chapters: { type: Array, default: () => [] }, // [{_id, name}] C1 band, creation order
   selectedEntityId: { type: String, default: null },
   selectedRelationId: { type: String, default: null },
 })
@@ -43,6 +44,8 @@ const emit = defineEmits([
   'draw-relation', // { fromId, toId }
   'rename-slice', // { sliceId, name }
   'archive-slice', // { sliceId }
+  'assign-chapter', // { sliceId, chapterId | null }
+  'create-chapter', // { sliceId, name }
 ])
 
 const ui = useUiStore()
@@ -54,9 +57,9 @@ const removePlacement = useRemovePlacement()
 const boardList = computed(() => boards.value ?? [])
 const laneRows = computed(() => laneRowsFor(boardList.value, props.lanesOn))
 
-// Shared row template: [header] [trigger] [command] [lane × N] [strip].
+// Shared row template: [chapter band] [header] [trigger] [command] [lane × N] [strip].
 const gridRows = computed(
-  () => `auto auto auto ${laneRows.value.map(() => 'auto').join(' ')} auto`,
+  () => `auto auto auto auto ${laneRows.value.map(() => 'auto').join(' ')} auto`,
 )
 
 const contextNames = computed(() => new Map(props.contexts.map((c) => [c._id, c.name])))
@@ -225,7 +228,7 @@ onBeforeUnmount(() => {
             v-for="(lane, i) in laneRows"
             :key="lane.laneId ?? 'none'"
             :data-testid="`lane-label-${lane.laneId ?? 'none'}`"
-            :style="{ gridRow: `${4 + i}` }"
+            :style="{ gridRow: `${5 + i}` }"
             class="max-w-28 self-start truncate pr-3 pt-3 text-[10px] font-medium uppercase tracking-wide text-gray-400"
           >
             {{ laneLabel(lane.laneId) }}
@@ -239,6 +242,7 @@ onBeforeUnmount(() => {
           :lane-rows="laneRows"
           :lanes-on="lanesOn"
           :fields-on="fieldsOn"
+          :chapters="chapters"
           :selected-entity-id="selectedEntityId"
           :in-flight-swaps="inFlightSwaps"
           @select-entity="(id) => onSelectEntity(id, board._id)"
@@ -249,6 +253,8 @@ onBeforeUnmount(() => {
           @swap="(pair) => requestSwap(board._id, pair)"
           @rename="(name) => emit('rename-slice', { sliceId: board._id, name })"
           @archive="emit('archive-slice', { sliceId: board._id })"
+          @assign-chapter="(chapterId) => emit('assign-chapter', { sliceId: board._id, chapterId })"
+          @create-chapter="(name) => emit('create-chapter', { sliceId: board._id, name })"
         />
 
         <!-- relation arrows: straight lines, measured from card rects -->

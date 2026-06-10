@@ -17,6 +17,7 @@ const props = defineProps({
   laneRows: { type: Array, required: true }, // shared rows from laneRowsFor
   lanesOn: { type: Boolean, default: false },
   fieldsOn: { type: Boolean, default: true },
+  chapters: { type: Array, default: () => [] }, // [{_id, name}] creation order (C1 band)
   selectedEntityId: { type: String, default: null },
   inFlightSwaps: { type: Set, default: () => new Set() },
 })
@@ -30,6 +31,8 @@ const emit = defineEmits([
   'swap', // { entityIdA, entityIdB }
   'rename', // name
   'archive',
+  'assign-chapter', // chapterId | null (null = clear)
+  'create-chapter', // name (then assign)
 ])
 
 const bands = computed(() => buildBands(props.board.placements ?? [], props.laneRows))
@@ -51,6 +54,22 @@ function onRename() {
   const name = window.prompt('Slice name', props.board.name)
   if (name && name.trim()) emit('rename', name.trim())
 }
+// C1: the chapter band select — assign / clear / inline-create.
+function onChapterChange(event) {
+  const value = event.target.value
+  if (value === '__new__') {
+    // Reset the select to the current assignment; the refetch confirms later.
+    event.target.value = props.board.chapterId ?? ''
+    const name = window.prompt('Chapter name')
+    if (name && name.trim()) emit('create-chapter', name.trim())
+    return
+  }
+  if (value === '') {
+    if (props.board.chapterId) emit('assign-chapter', null)
+    return
+  }
+  if (value !== props.board.chapterId) emit('assign-chapter', value)
+}
 function onArchive() {
   if (window.confirm(`Archive slice "${props.board.name || '(unnamed)'}"?`)) emit('archive')
 }
@@ -62,8 +81,27 @@ function onArchive() {
     class="grid min-w-[480px] grid-rows-[subgrid] rounded-lg border border-gray-300 bg-white shadow-sm"
     style="grid-row: 1 / -1"
   >
+    <!-- chapter band row (C1) — the shared organizing band above the headers -->
+    <div
+      :data-testid="`chapter-band-${board._id}`"
+      class="flex min-h-7 items-center rounded-t-lg border-b border-amber-200/70 bg-amber-50/70 px-3"
+      @click.stop
+    >
+      <select
+        :data-testid="`chapter-select-${board._id}`"
+        class="w-full cursor-pointer truncate bg-transparent text-[11px] font-medium uppercase tracking-wide text-amber-700 focus:outline-none"
+        :value="board.chapterId ?? ''"
+        title="Chapter (organizing band)"
+        @change="onChapterChange"
+      >
+        <option value="">(no chapter)</option>
+        <option v-for="ch in chapters" :key="ch._id" :value="ch._id">{{ ch.name }}</option>
+        <option value="__new__">+ new chapter…</option>
+      </select>
+    </div>
+
     <!-- header row -->
-    <div class="flex min-h-9 items-center justify-between rounded-t-lg border-b border-gray-200 bg-gray-50 px-3">
+    <div class="flex min-h-9 items-center justify-between border-b border-gray-200 bg-gray-50 px-3">
       <!-- testid deliberately NOT slice-box-* — e2e selects boxes by that prefix. -->
       <span data-testid="slice-name" class="truncate text-sm font-semibold text-gray-800">
         {{ board.name || '(unnamed slice)' }}
