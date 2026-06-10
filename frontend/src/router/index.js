@@ -25,10 +25,10 @@ const routes = [
     meta: { layout: 'app' }, // requires auth (default)
   },
   {
-    path: '/slices/:id',
-    name: 'slice-canvas',
-    component: () => import('@/pages/SliceCanvas.vue'),
-    // fullBleed → AppLayout drops <main> padding so the canvas fills the shell.
+    path: '/models/:id',
+    name: 'workspace',
+    component: () => import('@/pages/Workspace.vue'),
+    // fullBleed → AppLayout drops <main> padding so the 3-pane shell fills it.
     meta: { layout: 'app', fullBleed: true }, // requires auth (default)
   },
   // Unknown paths → home; the guard then redirects to /login if unauthenticated.

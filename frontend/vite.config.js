@@ -21,4 +21,8 @@ export default defineConfig({
       },
     },
   },
+  // Vitest (unit) — src only; e2e/ belongs to Playwright.
+  test: {
+    include: ['src/**/*.test.js'],
+  },
 })

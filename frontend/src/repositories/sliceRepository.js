@@ -1,94 +1,131 @@
 // LAYER 3 — slice domain repository. The ONLY place that imports both
 // @pinia/colada (cache) and the http transport for the slice aggregate. A slice
-// is the canvas: its single GET returns the whole board (placements + relations,
-// archived entities already filtered server-side), so ONE query key feeds the
-// vue-flow host. Mutations each invalidate that key (exact) on settle so the
-// canvas refetches the authoritative board. See notes/frontend-architecture.md §3.
+// GET returns the whole board (placements pre-sorted band→slot, relations with
+// their STORED kind, auto-surfaced scenarios — archived entities already
+// filtered server-side). Placement is SNAP-SLOT (F3): `{ slotRole, slot }`
+// computed server-side, NO x/y anywhere; reorder is a slot SWAP.
 //
-// Backend paths (build-to contract):
+// Backend paths (build-to contract — backend/src/domain/slice/api.ts):
 //   GET    /api/slices/:id
-//     → { _id, name, placements:[{entityId,x,y,name,entityType}],
-//          relations:[{_id,fromId,toId,kind}] }
-//   POST   /api/slices                              { entityId, name? }
-//   PUT    /api/slices/:id/name                     { name }
+//     → { _id, modelId, name,
+//          placements:[{entityId,entityType,slotRole,slot?,lane?,name,definition}],
+//          relations:[{_id,fromId,toId,kind,meta?}],
+//          scenarios:[{_id,kind,anchorId,given,when?,then,referencedEntityIds}] }
+//     placements arrive SORTED band→slot — response order IS render order.
+//   GET    /api/models/:id/slices                  → [{_id,name}] creation order
+//   POST   /api/slices                             { modelId, sliceId, name? }
+//   PUT    /api/slices/:id/name                    { name }
 //   DELETE /api/slices/:id
-//   POST   /api/slices/:id/placements               { placedEntityId, x, y }
-//   PUT    /api/slices/:id/placements/:placedId     { x, y }   (move)
+//   POST   /api/slices/:id/placements              { placedEntityId }
+//   POST   /api/slices/:id/swaps                   { entityIdA, entityIdB }
 //   DELETE /api/slices/:id/placements/:placedId
-//   POST   /api/relations                           { entityId, fromId, toId } → 200/422/409
-//   DELETE /api/relations/:id
 //
-// Mutations take a SINGLE object arg that always carries `sliceId` so onSettled
-// can invalidate the owning slice without a closure over route state.
+// Mutations take a SINGLE object arg carrying the ids onSettled needs for
+// invalidation. Board mutations spaced-invalidate the ['slices'] PREFIX (the
+// multi-box canvas reads one combined boards query; relations/scenarios embed
+// in slice GETs) — chatty but correct, accepted for v1.
 import { useQuery, useMutation, useQueryCache } from '@pinia/colada'
-import { http, HttpError } from '@/lib/http'
+import { http } from '@/lib/http'
+import { retry404, spacedInvalidate } from '@/lib/projectionLag'
+import { MODEL_KEYS } from '@/repositories/modelRepository'
 
 // 1. query keys — single source of truth for invalidation.
 export const SLICE_KEYS = {
   root: ['slices'],
   /** @param {string} id */
   byId: (id) => ['slices', id],
+  /** @param {string} modelId */
+  listByModel: (modelId) => ['slices', 'byModel', modelId],
+  /** @param {string[]} ids */
+  boards: (ids) => ['slices', 'boards', ids.join(',')],
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+/** GET one board, retrying a transient 404 (fresh-slice projection lag). */
+const getSlice = (id) => retry404(() => http.get(`/api/slices/${id}`))
 
-// Read models are projected ASYNC from the event log, so a read can briefly race
-// the write it follows (eventual consistency). Two small accommodations keep the
-// canvas robust without optimistic-cache surgery (a v1 simplification):
-//   - a just-created slice may 404 until its projection lands → retry the GET;
-//   - after a mutation, let the ~50ms projection settle before refetching so the
-//     authoritative board reflects the change. See notes/event-sourcing-architecture.md.
-const PROJECTION_LAG_MS = 250
-const FRESH_SLICE_RETRIES = 6
-
-/** GET the slice, retrying a transient 404 (fresh-slice projection lag). */
-async function getSlice(id) {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await http.get(`/api/slices/${id}`)
-    } catch (e) {
-      const transient404 =
-        e instanceof HttpError && e.status === 404 && attempt < FRESH_SLICE_RETRIES
-      if (!transient404) throw e
-      await sleep(PROJECTION_LAG_MS)
-    }
-  }
-}
-
-// A single refetch can race the ~50ms projection: a fresh placement whose catalog
-// row hasn't landed is dropped by the GET join and, with no further refetch, never
-// reappears. Fire a few SPACED refetches so the board converges on the authoritative
-// state. (v1 simplification; optimistic cache updates would remove the wait.)
-const REVALIDATE_DELAYS_MS = [PROJECTION_LAG_MS, 500, 1000]
-
-/** Let the async projections settle, then converge the board via spaced refetches. */
-async function revalidateSlice(cache, sliceId) {
-  for (const delay of REVALIDATE_DELAYS_MS) {
-    await sleep(delay)
-    await cache.invalidateQueries({ key: SLICE_KEYS.byId(sliceId), exact: true })
-  }
-}
-
-// 2. read composable — wraps useQuery. The whole canvas reads from this.
+// 2. read composables.
 /**
- * @param {() => string} getId reactive id getter (so the key tracks route params)
+ * @param {() => string} getId reactive id getter
+ * @param {{ enabled?: () => boolean }} [opts] callers with an optional id gate
+ *        the fetch (an empty id would 404-retry pointlessly)
  */
-export function useSlice(getId) {
+export function useSlice(getId, { enabled } = {}) {
   return useQuery({
     key: () => SLICE_KEYS.byId(getId()),
     query: () => getSlice(getId()),
+    ...(enabled ? { enabled } : {}),
   })
 }
 
-// 3. writes — mutation factories. Each invalidates the owning slice (exact) on
-//    settle so useSlice refetches the authoritative board.
+/**
+ * The model's slices in creation order — drives the W3 left→right tiling.
+ * @param {() => string} getModelId reactive model-id getter
+ */
+export function useModelSlices(getModelId) {
+  return useQuery({
+    key: () => SLICE_KEYS.listByModel(getModelId()),
+    query: () => http.get(`/api/models/${getModelId()}/slices`),
+  })
+}
+
+/**
+ * Every visible board in ONE query (the multi-box canvas input). Keyed by the
+ * id list, so scope changes refetch; any board mutation's ['slices'] prefix
+ * invalidation also hits it.
+ * @param {() => string[]} getIds reactive creation-ordered slice ids
+ */
+export function useSliceBoards(getIds) {
+  return useQuery({
+    key: () => SLICE_KEYS.boards(getIds()),
+    query: () => Promise.all(getIds().map(getSlice)),
+  })
+}
+
+// 3. writes — each converges the affected reads on settle.
+
+/** Re-converge every board (prefix) without blocking the caller's save. */
+function settleBoards(cache) {
+  void spacedInvalidate(cache, SLICE_KEYS.root).catch(() => {})
+}
+
 export function useDefineSlice() {
   const cache = useQueryCache()
   return useMutation({
-    /** @param {{ entityId: string, name?: string }} payload */
+    /** @param {{ modelId: string, sliceId: string, name?: string }} payload */
     mutation: (payload) => http.post('/api/slices', payload),
-    async onSettled() {
-      await cache.invalidateQueries({ key: SLICE_KEYS.root })
+    async onSettled(_d, _e, { modelId }) {
+      // New box: tiling list + model sliceCount now, boards converge spaced.
+      await cache.invalidateQueries({ key: SLICE_KEYS.listByModel(modelId), exact: true })
+      await cache.invalidateQueries({ key: MODEL_KEYS.root, exact: true })
+      void spacedInvalidate(cache, SLICE_KEYS.listByModel(modelId), { exact: true }).catch(() => {})
+      settleBoards(cache)
+    },
+  })
+}
+
+export function useRenameSlice() {
+  const cache = useQueryCache()
+  return useMutation({
+    /** @param {{ modelId: string, sliceId: string, name: string }} vars */
+    mutation: ({ sliceId, name }) => http.put(`/api/slices/${sliceId}/name`, { name }),
+    async onSettled(_d, _e, { modelId }) {
+      await cache.invalidateQueries({ key: SLICE_KEYS.listByModel(modelId), exact: true })
+      void spacedInvalidate(cache, SLICE_KEYS.listByModel(modelId), { exact: true }).catch(() => {})
+      settleBoards(cache)
+    },
+  })
+}
+
+export function useArchiveSlice() {
+  const cache = useQueryCache()
+  return useMutation({
+    /** @param {{ modelId: string, sliceId: string }} vars */
+    mutation: ({ sliceId }) => http.del(`/api/slices/${sliceId}`),
+    async onSettled(_d, _e, { modelId }) {
+      await cache.invalidateQueries({ key: SLICE_KEYS.listByModel(modelId), exact: true })
+      await cache.invalidateQueries({ key: MODEL_KEYS.root, exact: true })
+      void spacedInvalidate(cache, SLICE_KEYS.listByModel(modelId), { exact: true }).catch(() => {})
+      settleBoards(cache)
     },
   })
 }
@@ -96,23 +133,23 @@ export function useDefineSlice() {
 export function usePlaceEntity() {
   const cache = useQueryCache()
   return useMutation({
-    /** @param {{ sliceId: string, placedEntityId: string, x: number, y: number }} vars */
-    mutation: ({ sliceId, placedEntityId, x, y }) =>
-      http.post(`/api/slices/${sliceId}/placements`, { placedEntityId, x, y }),
-    async onSettled(_data, _error, { sliceId }) {
-      await revalidateSlice(cache, sliceId)
+    /** @param {{ sliceId: string, placedEntityId: string }} vars — band+slot computed server-side (F3) */
+    mutation: ({ sliceId, placedEntityId }) =>
+      http.post(`/api/slices/${sliceId}/placements`, { placedEntityId }),
+    onSettled() {
+      settleBoards(cache)
     },
   })
 }
 
-export function useMovePlacement() {
+export function useSwapSlots() {
   const cache = useQueryCache()
   return useMutation({
-    /** @param {{ sliceId: string, placedId: string, x: number, y: number }} vars */
-    mutation: ({ sliceId, placedId, x, y }) =>
-      http.put(`/api/slices/${sliceId}/placements/${placedId}`, { x, y }),
-    async onSettled(_data, _error, { sliceId }) {
-      await revalidateSlice(cache, sliceId)
+    /** @param {{ sliceId: string, entityIdA: string, entityIdB: string }} vars */
+    mutation: ({ sliceId, entityIdA, entityIdB }) =>
+      http.post(`/api/slices/${sliceId}/swaps`, { entityIdA, entityIdB }),
+    onSettled() {
+      settleBoards(cache)
     },
   })
 }
@@ -123,31 +160,8 @@ export function useRemovePlacement() {
     /** @param {{ sliceId: string, placedId: string }} vars */
     mutation: ({ sliceId, placedId }) =>
       http.del(`/api/slices/${sliceId}/placements/${placedId}`),
-    async onSettled(_data, _error, { sliceId }) {
-      await revalidateSlice(cache, sliceId)
-    },
-  })
-}
-
-export function useDrawRelation() {
-  const cache = useQueryCache()
-  return useMutation({
-    /** @param {{ sliceId: string, entityId: string, fromId: string, toId: string }} vars */
-    mutation: ({ entityId, fromId, toId }) =>
-      http.post('/api/relations', { entityId, fromId, toId }),
-    async onSettled(_data, _error, { sliceId }) {
-      await revalidateSlice(cache, sliceId)
-    },
-  })
-}
-
-export function useDeleteRelation() {
-  const cache = useQueryCache()
-  return useMutation({
-    /** @param {{ sliceId: string, relationId: string }} vars */
-    mutation: ({ relationId }) => http.del(`/api/relations/${relationId}`),
-    async onSettled(_data, _error, { sliceId }) {
-      await revalidateSlice(cache, sliceId)
+    onSettled() {
+      settleBoards(cache)
     },
   })
 }
