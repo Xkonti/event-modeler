@@ -199,6 +199,7 @@ async function onExport() {
       <ModelCanvas
         :slice-ids="sliceIds"
         :lanes-on="workspace.lanesVisible"
+        :fields-on="workspace.fieldsVisible"
         :contexts="contexts ?? []"
         :selected-entity-id="workspace.selectedEntityId"
         :selected-relation-id="workspace.selectedRelationId"

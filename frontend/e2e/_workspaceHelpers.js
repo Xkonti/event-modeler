@@ -82,10 +82,9 @@ export async function placeViaGhost(page, sliceId, role, entityName) {
 }
 
 /**
- * An entity card on the canvas by name. NOTE: vue-flow renders child nodes in
- * a global node layer (NOT inside the box's DOM), so cards can't be scoped by
- * box element; with one workspace open, name + .first() is unambiguous enough
- * for these specs.
+ * An entity card on the canvas by name. Cards render inside their slice
+ * frame's DOM (plain CSS-grid canvas), but with one workspace open, name +
+ * .first() stays unambiguous enough for these specs.
  */
 export function cardOnCanvas(page, entityName) {
   return page.locator('[data-entity-id]', { hasText: entityName }).first()

@@ -27,6 +27,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   // Presentation toggles (layers.md) — never persisted to the backend.
   const lanesVisible = ref(false) // off by default in early planning (swimlanes.md)
+  const fieldsVisible = ref(true) // detail layers default ON (layers.md)
   const validationPanelOpen = ref(false)
 
   const selectedEntityId = computed(() =>
@@ -63,11 +64,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function toggleLanes() {
     lanesVisible.value = !lanesVisible.value
   }
+  function toggleFields() {
+    fieldsVisible.value = !fieldsVisible.value
+  }
 
   return {
     selection,
     draft,
     lanesVisible,
+    fieldsVisible,
     validationPanelOpen,
     selectedEntityId,
     selectedRelationId,
@@ -78,5 +83,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     startDraft,
     clearDraft,
     toggleLanes,
+    toggleFields,
   }
 })

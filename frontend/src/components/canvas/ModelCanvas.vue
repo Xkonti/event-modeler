@@ -1,36 +1,32 @@
 <script setup>
-// VIEW (canvas host) — the W3 canvas pane: ONE VueFlow instance tiling every
-// slice box left→right in creation order. Fully CONTROLLED: geometry comes from
-// the pure layout solver (lib/layout/sliceLayout) through the flow adapter —
-// the user never authors x/y; entity nodes are children of their box node.
-// Z-order sandwich: box chrome 0 < edges 5 < cards 10.
+// VIEW (canvas host) — the W3 canvas pane as a plain scrollable CSS GRID, the
+// "giant table" (notes/layout-and-rendering.md → "Rendering mechanism"; no
+// graph lib, no layout solver). Columns = slices left→right in creation order;
+// rows = [header] [trigger] [command] [fact lane × N] [strip], SHARED across
+// the board — every SliceFrame is a subgrid column, so lanes align across
+// slices and each row auto-sizes to its tallest cell. Pan = native scroll.
+//
+// Relations render as straight SVG lines in one absolutely-positioned overlay:
+// endpoints are measured from the card DOM rects (data-card markers) after
+// every board/toggle change and on container resize. Creating a relation is a
+// card button (EntityCard ← / →), not a gesture.
 //
 // Data: useSliceBoards (one combined query over the visible slice ids); any
 // board mutation's ['slices'] prefix invalidation refetches it — the server
-// stays the source of truth, no optimistic board mutation.
-//
-// Intents: placement-scoped mutations (slot SWAP, Delete-key placement removal)
-// are issued HERE (they need board-local context); everything else — selection,
-// add entity/scenario, draw relation, slice rename/archive — emits upward to
-// Workspace.vue, the single cross-domain intent→repo hub. Node components can't
-// bubble events (vue-flow renders them detached), so intents travel via
-// provide('canvasIntents').
-import { computed, provide, ref, watch, markRaw, onBeforeUnmount } from 'vue'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
-import { Background } from '@vue-flow/background'
-import SliceBoxNode from '@/components/canvas/SliceBoxNode.vue'
-import EntityCardNode from '@/components/canvas/EntityCardNode.vue'
-import RelationEdge from '@/components/canvas/RelationEdge.vue'
-import { layoutSlice, layoutCanvas } from '@/lib/layout/sliceLayout'
-import { mapSliceToFlow } from '@/lib/layout/flowAdapter'
+// stays the source of truth. Placement-scoped mutations (slot SWAP, Delete-key
+// placement removal) are issued HERE; everything else emits upward to
+// Workspace.vue, the single cross-domain intent→repo hub.
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import SliceFrame from '@/components/canvas/SliceFrame.vue'
+import { laneRowsFor } from '@/lib/layout/boardView'
 import { useSliceBoards, useSwapSlots, useRemovePlacement } from '@/repositories/sliceRepository'
-import { useCanvasStore } from '@/stores/canvas'
 import { useUiStore } from '@/stores/ui'
 import { HttpError } from '@/lib/http'
 
 const props = defineProps({
   sliceIds: { type: Array, required: true }, // creation order (W3 tiling)
   lanesOn: { type: Boolean, default: false },
+  fieldsOn: { type: Boolean, default: true },
   contexts: { type: Array, default: () => [] }, // [{_id, name}] for lane labels
   selectedEntityId: { type: String, default: null },
   selectedRelationId: { type: String, default: null },
@@ -49,57 +45,98 @@ const emit = defineEmits([
   'archive-slice', // { sliceId }
 ])
 
-const canvas = useCanvasStore()
 const ui = useUiStore()
 
 const { data: boards, isPending, error } = useSliceBoards(() => props.sliceIds)
 const swapSlots = useSwapSlots()
 const removePlacement = useRemovePlacement()
 
-// --- DTO → controlled nodes/edges -------------------------------------------
-const nodeTypes = { sliceBox: markRaw(SliceBoxNode), entityCard: markRaw(EntityCardNode) }
-const edgeTypes = { relation: markRaw(RelationEdge) }
-const nodes = ref([])
-const edges = ref([])
+const boardList = computed(() => boards.value ?? [])
+const laneRows = computed(() => laneRowsFor(boardList.value, props.lanesOn))
 
-function rebuild() {
-  const dtos = boards.value ?? []
-  const tiled = layoutCanvas(
-    dtos.map((dto) => ({
-      sliceId: dto._id,
-      layout: layoutSlice(dto.placements ?? [], { lanesOn: props.lanesOn }),
-    })),
-  )
-  const layoutById = new Map(tiled.map((t) => [t.sliceId, t]))
-  const nextNodes = []
-  const nextEdges = []
-  for (const dto of dtos) {
-    const t = layoutById.get(dto._id)
-    const mapped = mapSliceToFlow(dto, t.layout, t.origin)
-    nextNodes.push(...mapped.nodes)
-    nextEdges.push(...mapped.edges)
-  }
-  nodes.value = nextNodes
-  edges.value = nextEdges
-}
+// Shared row template: [header] [trigger] [command] [lane × N] [strip].
+const gridRows = computed(
+  () => `auto auto auto ${laneRows.value.map(() => 'auto').join(' ')} auto`,
+)
 
-watch([boards, () => props.lanesOn], rebuild, { immediate: true })
+const contextNames = computed(() => new Map(props.contexts.map((c) => [c._id, c.name])))
+const laneLabel = (laneId) =>
+  laneId === null ? '(none)' : contextNames.value.get(laneId) ?? laneId.slice(0, 8)
 
 watch(error, (err) => {
   if (!err) return
   ui.pushBanner('error', err instanceof HttpError ? err.message || 'Could not load the board.' : 'Could not load the board.')
 })
 
-// --- intents (provide/inject — node components render detached) --------------
+// --- relation overlay ---------------------------------------------------------
+// Edge list from the DTOs (both endpoints placed in the slice — the server
+// already filters; drop defensively anyway), then MEASURED into line segments
+// from the rendered card rects. Straight lines by design.
+const gridEl = ref(null) // the grid (also the overlay's coordinate space)
+const edgeSegments = ref([])
+
+function measureEdges() {
+  const host = gridEl.value
+  if (!host) {
+    edgeSegments.value = []
+    return
+  }
+  const hostRect = host.getBoundingClientRect()
+  const segments = []
+  for (const board of boardList.value) {
+    const placed = new Set((board.placements ?? []).map((p) => p.entityId))
+    for (const rel of board.relations ?? []) {
+      if (!placed.has(rel.fromId) || !placed.has(rel.toId)) continue
+      const fromEl = host.querySelector(`[data-card="${board._id}:${rel.fromId}"]`)
+      const toEl = host.querySelector(`[data-card="${board._id}:${rel.toId}"]`)
+      if (!fromEl || !toEl) continue
+      const a = fromEl.getBoundingClientRect()
+      const b = toEl.getBoundingClientRect()
+      // Leave from the edge facing the target: bottom-center when the target
+      // sits below, top-center when above.
+      const down = b.top + b.height / 2 >= a.top + a.height / 2
+      segments.push({
+        id: `${rel._id}@${board._id}`,
+        relationId: rel._id,
+        sliceId: board._id,
+        kind: rel.kind,
+        x1: a.left + a.width / 2 - hostRect.left,
+        y1: (down ? a.bottom : a.top) - hostRect.top,
+        x2: b.left + b.width / 2 - hostRect.left,
+        y2: (down ? b.top : b.bottom) - hostRect.top,
+      })
+    }
+  }
+  edgeSegments.value = segments
+}
+
+watch(
+  [boardList, () => props.lanesOn, () => props.fieldsOn],
+  () => nextTick(measureEdges),
+  { immediate: true },
+)
+
+let resizeObserver = null
+onMounted(() => {
+  resizeObserver = new ResizeObserver(() => measureEdges())
+  if (gridEl.value) resizeObserver.observe(gridEl.value)
+})
+
+// --- intents ------------------------------------------------------------------
 // Delete needs the BOX a selection came from (the same entity can sit in many
 // boxes); remember the placement context of the last card click.
 const lastPlacement = ref(null) // { sliceId, entityId } | null
 
-// Visuals-only pending set (descendant of the spike's inFlightMoves trick):
-// pulses both cards while their swap mutation is in flight, never positions.
+function onSelectEntity(entityId, sliceId) {
+  lastPlacement.value = { sliceId, entityId }
+  emit('select-entity', entityId)
+}
+
+// Visuals-only pending set: pulses both cards while their swap mutation is in
+// flight, never positions.
 const inFlightSwaps = ref(new Set())
 
-function requestSwap(sliceId, entityIdA, entityIdB) {
+function requestSwap(sliceId, { entityIdA, entityIdB }) {
   const next = new Set(inFlightSwaps.value)
   next.add(entityIdA).add(entityIdB)
   inFlightSwaps.value = next
@@ -116,64 +153,10 @@ function requestSwap(sliceId, entityIdA, entityIdB) {
     })
 }
 
-provide('canvasIntents', {
-  selectEntity(entityId, sliceId) {
-    lastPlacement.value = { sliceId, entityId }
-    emit('select-entity', entityId)
-  },
-  selectRelation(relationId) {
-    emit('select-relation', relationId)
-  },
-  selectScenario(scenarioId) {
-    emit('select-scenario', scenarioId)
-  },
-  addEntity(sliceId, role) {
-    emit('add-entity', { sliceId, role })
-  },
-  addScenario(sliceId, kind) {
-    emit('add-scenario', { sliceId, kind })
-  },
-  renameSlice(sliceId, name) {
-    emit('rename-slice', { sliceId, name })
-  },
-  archiveSlice(sliceId) {
-    emit('archive-slice', { sliceId })
-  },
-  requestSwap,
-})
-
-provide('canvasState', {
-  selectedEntityId: computed(() => props.selectedEntityId),
-  inFlightSwaps,
-})
-
-provide(
-  'contextNames',
-  computed(() => new Map(props.contexts.map((c) => [c._id, c.name]))),
-)
-
-// --- vue-flow events ----------------------------------------------------------
-const { onConnect, onPaneClick, onViewportChangeEnd } = useVueFlow()
-
-onPaneClick(() => {
+function onBackgroundClick() {
   lastPlacement.value = null
   emit('clear-selection')
-})
-onViewportChangeEnd((vp) => canvas.setViewport(vp))
-
-// Connect gesture → relation intent. Node ids are box-scoped
-// (`${sliceId}:${entityId}`); strip the scope, ignore box nodes.
-const entityIdOf = (nodeId) => {
-  if (!nodeId || nodeId.startsWith('box:')) return null
-  const i = nodeId.indexOf(':')
-  return i === -1 ? nodeId : nodeId.slice(i + 1)
 }
-onConnect(({ source, target }) => {
-  const fromId = entityIdOf(source)
-  const toId = entityIdOf(target)
-  if (!fromId || !toId || fromId === toId) return
-  emit('draw-relation', { fromId, toId })
-})
 
 // --- Delete key: remove the selected card's PLACEMENT (not the entity) -------
 function onKeydown(e) {
@@ -191,11 +174,14 @@ function onKeydown(e) {
     })
 }
 window.addEventListener('keydown', onKeydown)
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  resizeObserver?.disconnect()
+})
 </script>
 
 <template>
-  <div data-testid="model-canvas" class="relative h-full w-full">
+  <div data-testid="model-canvas" class="relative h-full w-full overflow-hidden bg-gray-50/50">
     <!-- + add slice (always available, top-left overlay) -->
     <div class="absolute left-3 top-3 z-20">
       <button
@@ -222,16 +208,87 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       No slices yet — add one to start modeling.
     </div>
 
-    <VueFlow
-      v-model:nodes="nodes"
-      v-model:edges="edges"
-      :node-types="nodeTypes"
-      :edge-types="edgeTypes"
-      :default-viewport="canvas.viewport"
-      :min-zoom="0.2"
-      class="h-full w-full"
-    >
-      <Background />
-    </VueFlow>
+    <!-- the giant table: native scroll, shared rows, subgrid slice columns -->
+    <div class="h-full w-full overflow-auto" @click="onBackgroundClick">
+      <div
+        ref="gridEl"
+        class="relative grid w-max items-stretch gap-x-16 p-8 pt-16"
+        :style="{ gridAutoFlow: 'column', gridAutoColumns: 'max-content', gridTemplateRows: gridRows }"
+      >
+        <!-- lane-label gutter column (lanes layer on) -->
+        <div
+          v-if="lanesOn && boardList.length"
+          class="grid grid-rows-[subgrid]"
+          style="grid-row: 1 / -1"
+        >
+          <span
+            v-for="(lane, i) in laneRows"
+            :key="lane.laneId ?? 'none'"
+            :data-testid="`lane-label-${lane.laneId ?? 'none'}`"
+            :style="{ gridRow: `${4 + i}` }"
+            class="max-w-28 self-start truncate pr-3 pt-3 text-[10px] font-medium uppercase tracking-wide text-gray-400"
+          >
+            {{ laneLabel(lane.laneId) }}
+          </span>
+        </div>
+
+        <SliceFrame
+          v-for="board in boardList"
+          :key="board._id"
+          :board="board"
+          :lane-rows="laneRows"
+          :lanes-on="lanesOn"
+          :fields-on="fieldsOn"
+          :selected-entity-id="selectedEntityId"
+          :in-flight-swaps="inFlightSwaps"
+          @select-entity="(id) => onSelectEntity(id, board._id)"
+          @select-scenario="(id) => emit('select-scenario', id)"
+          @add-entity="(role) => emit('add-entity', { sliceId: board._id, role })"
+          @add-scenario="(kind) => emit('add-scenario', { sliceId: board._id, kind })"
+          @relate="(draft) => emit('draw-relation', draft)"
+          @swap="(pair) => requestSwap(board._id, pair)"
+          @rename="(name) => emit('rename-slice', { sliceId: board._id, name })"
+          @archive="emit('archive-slice', { sliceId: board._id })"
+        />
+
+        <!-- relation arrows: straight lines, measured from card rects -->
+        <svg class="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
+          <defs>
+            <marker id="edge-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" class="fill-gray-400" />
+            </marker>
+            <marker id="edge-arrow-selected" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" class="fill-brand" />
+            </marker>
+          </defs>
+          <g v-for="seg in edgeSegments" :key="seg.id">
+            <!-- wide invisible hit area so the thin line is clickable -->
+            <line
+              :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2"
+              class="pointer-events-auto cursor-pointer stroke-transparent"
+              stroke-width="12"
+              @click.stop="emit('select-relation', seg.relationId)"
+            />
+            <line
+              :data-testid="`edge-${seg.sliceId}-${seg.kind}`"
+              :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2"
+              class="stroke-[1.5]"
+              :class="seg.relationId === selectedRelationId ? 'stroke-brand' : 'stroke-gray-400'"
+              :marker-end="seg.relationId === selectedRelationId ? 'url(#edge-arrow-selected)' : 'url(#edge-arrow)'"
+            />
+            <!-- label at 65% toward the target — midpoints tend to sit on ghosts/cards -->
+            <text
+              :x="seg.x1 + (seg.x2 - seg.x1) * 0.65"
+              :y="seg.y1 + (seg.y2 - seg.y1) * 0.65 - 4"
+              text-anchor="middle"
+              paint-order="stroke"
+              class="fill-gray-500 stroke-white stroke-2 text-[10px]"
+            >
+              {{ seg.kind }}
+            </text>
+          </g>
+        </svg>
+      </div>
+    </div>
   </div>
 </template>

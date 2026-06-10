@@ -34,6 +34,17 @@ const workspace = useWorkspaceStore()
       Lanes
     </label>
 
+    <label class="flex cursor-pointer items-center gap-1.5 text-sm text-gray-600">
+      <input
+        data-testid="fields-toggle"
+        type="checkbox"
+        class="accent-brand"
+        :checked="workspace.fieldsVisible"
+        @change="workspace.toggleFields()"
+      />
+      Fields
+    </label>
+
     <Button
       data-testid="check-model"
       variant="secondary"

@@ -1,10 +1,5 @@
 @import "tailwindcss";
 
-/* vue-flow canvas styles — base + default theme. Must follow tailwindcss so
- * vue-flow's own classes are present; brand-token overrides live in components. */
-@import "@vue-flow/core/dist/style.css";
-@import "@vue-flow/core/dist/theme-default.css";
-
 /*
  * Tailwind v4 — design tokens live in CSS via @theme (no tailwind.config.js,
  * no postcss.config.js). Tokens here become utilities/vars: e.g. --color-brand

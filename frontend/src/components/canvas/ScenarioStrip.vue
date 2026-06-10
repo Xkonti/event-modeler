@@ -1,9 +1,8 @@
 <script setup>
 // VIEW (canvas) — the slice box's bottom TEXT strip: auto-surfaced GWT/GT
 // scenarios (F6 — pulled in by reference, never placed) rendered as text,
-// grouped by anchor, exactly the W4 art. Clamped with an expander; `nodrag
-// nopan` so text selection doesn't fight the canvas. "+ GWT / + GT" open the
-// scenario editor via intent. A notes slot is reserved for later (the DTO
+// grouped by anchor, exactly the W4 art. Clamped with an expander. "+ GWT /
+// + GT" open the scenario editor. A notes slot is reserved for later (the DTO
 // carries no notes yet).
 import { computed, ref } from 'vue'
 
@@ -41,7 +40,7 @@ function clauseText(s) {
 <template>
   <div
     :data-testid="`scenario-strip-${sliceId}`"
-    class="nodrag nopan border-t border-gray-200 bg-gray-50/80 px-3 py-2 text-[11px] leading-5 text-gray-700"
+    class="rounded-b-lg border-t border-gray-200 bg-gray-50/80 px-3 py-2 text-[11px] leading-5 text-gray-700"
   >
     <div v-for="row in rows" :key="row.scenario._id">
       <button
