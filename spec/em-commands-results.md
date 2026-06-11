@@ -236,7 +236,9 @@ SLICE  Place Entity                          [state change]
            slot           ← UI (integer vertical index within the role band, 0 = top);
                             OMITTED for single-cardinality bands (command, automation, translation)
   card     command / automation / translation → ONE per slice (no slot);
-           wireframes / read models / business facts → MANY (slot-numbered)
+           wireframes / business facts → MANY (slot-numbered)
+  rules    read models are NOT placeable (F8 auto-RM 2026-06-11, below):
+           decider rejects + HTTP 422 pre-check
   gaps     —
 
 SLICE  Swap Placement Slots / Remove          [state change]
@@ -264,23 +266,54 @@ SLICE  Slice Canvas  (the money read model)   [state view]
             ⋈ scenarios       → rules anchored on / referencing visible entities (Flow 5)
   sources     slotRole ← EntityPlaced;  lane ← entity_catalog.contextId (join, facts only);
               name/type/fields ← catalog;  edges ← relations_graph;  rules ← scenarios
-  rules       drop placements whose catalog entry is missing or archived (no ghosts)
+  rules       drop placements whose catalog entry is missing or archived (no ghosts);
+              drop historic readModel placements at read time (F8 auto-RM 2026-06-11);
+              scenario auto-surface set additionally includes the RMs read by this
+              slice's triggers (displayedBy/monitoredBy edges) so RM-anchored GTs
+              keep surfacing without a placement
   gaps        —
+
+RELATION  Model Relations  (auto-RM source)    [state view]
+  read model  GET /api/models/:id/relations → [{ relationId, fromId, toId, kind, meta }]
+  fed by      relations_graph (model-scoped, verbatim)
+  purpose     the frontend derives AUTO-DISPLAYED read models from this graph
+              (F8 auto-RM 2026-06-11, below) — cards + cross-slice feed arrows
 ```
 
 **Discovered — F3 (placement = slot number, lane derived; NOT x/y).** _[refined by the user
-2026-06-08]_ Backend stores `EntityPlaced { x, y }` (freeform). Snap slots mean the **role band is
-a function of the entity's type** — wireframe→`trigger`, automation/translation→`trigger`,
-command→`command`, readModel→`readModel` (same band, distinct sub-role), fact/externalFact→`fact`.
+2026-06-08; readModel removed 2026-06-11 — see auto-RM FIX below]_ Backend stores `EntityPlaced
+{ x, y }` (freeform). Snap slots mean the **role band is a function of the entity's type** —
+wireframe→`trigger`, automation/translation→`trigger`, command→`command`,
+fact/externalFact→`fact`. **Read models have NO placement band** — they are auto-displayed.
 The user never picks a band; the placement records only a **`slot`** — an integer vertical index
 within that band (`0` = top, `1` below it). `slotRole` is **computed at placement** from the type.
 **Cardinality:** command / automation / translation are **single** per slice (no slot);
-**wireframes, read models, and business facts are multiple**, each slot-numbered (e.g. 4 facts off
+**wireframes and business facts are multiple**, each slot-numbered (e.g. 4 facts off
 one command → slots 0,1,2,3). **Reordering = swapping the slot numbers of two placements**
 (`SwapEntitySlots`) — the sole reorder primitive; no cross-band moves. The **lane is NOT stored on
 the placement** — it is the fact's intrinsic `contextId`, joined at render → no drift, and re-homing
 a fact's lane (Flow 2) updates every slice for free. x/y is gone (pure layout-solver output if ever
 needed). **FIX** (amends `slice/events.ts`, `slice/slice.ts`, `read/slicePlacements.ts`).
+
+**FIX F8 2026-06-11 (auto-RM) — read models are auto-displayed, never placed.** _[decided by the
+user 2026-06-11]_ A read model is derived: fed by facts, read by triggers — it has no manual
+placement. **Display rule:** an RM renders in slice S (left column, command-band height) whenever
+a trigger placed in S reads it (`displayedBy` RM→wireframe, `monitoredBy` RM→automation); one card
+per RM per slice, deduped across readers. **Straddle rule:** if that RM is also fed (`feeds` /
+`directTranslation`) by a fact placed in the slice immediately LEFT of S, the card renders
+straddling the shared boundary (it sits *between* producer and consumer). Same-slice/non-adjacent
+feeds → plain left column. **Arrow locality (2026-06-11):** each RM card draws ONLY its
+same-slice displayedBy/monitoredBy edges + the feed edges from the immediate-left slice; every
+other feed/read of a shared RM stays undrawn (a widely-shared RM would otherwise flood the canvas
+with arrows — network exploration is a future, separate mechanism).
+**Write side:** `PlaceEntity` rejects readModel (decider) + 422 HTTP pre-check; historic readModel
+placements are dropped at read time (slice GET + model_export — no migrations). **Relate UX:** a
+trigger's "←" / a fact's "→" offers all catalog read models (model-level pair exclusion); creating
+the relation makes the RM appear. The frontend derives all of this from
+`GET /api/models/:id/relations` + the entity catalog (which now ships `definition`).
+(Amends `slice/slice.ts`, `slice/api.ts`, `relation/api.ts`, `model/api.ts`,
+`read/modelExport.ts`; frontend `boardView.js` autoReadModels, `SliceFrame.vue`,
+`ModelCanvas.vue`.)
 
 **Discovered — refines W4 "drag to another slot".** Since the band = type, you **cannot** drag a
 command into the facts band. Reordering is `SwapEntitySlots` — a **slot swap between two placements
@@ -567,11 +600,12 @@ facts, O1/O2 publish/import semantics) — **all now resolved in `em-automations
 | **F1** | `modelId` threads through **every** command/fact/read model; read models scoped by it | all backend events (none carry modelId) |
 | **F1b** | Name uniqueness is **per-model** → constraint key `(modelId, normalized_name)` | `constraints/entityNames.ts` |
 | **F2** | Drop the `context` **string** from entity definitions; lane = the Context entity via assignment; name-prefix is a display convention, not stored | `businessFact/events.ts`, `command/events.ts`, catalog |
-| **F3** | Placement = `{ slotRole(computed from type), slot(int, 0=top) }`; command/automation/translation single (no slot), wireframes/read-models/facts multiple; **lane derived** from `contextId`; reorder = slot **swap** (`SwapEntitySlots`); no x/y | `slice/events.ts`, `slice/slice.ts`, `read/slicePlacements.ts`; refines wireframes W4 |
+| **F3** | Placement = `{ slotRole(computed from type), slot(int, 0=top) }`; command/automation/translation single (no slot), wireframes/facts multiple; **lane derived** from `contextId`; reorder = slot **swap** (`SwapEntitySlots`); no x/y. _Read models excluded 2026-06-11 — see F8._ | `slice/events.ts`, `slice/slice.ts`, `read/slicePlacements.ts`; refines wireframes W4 |
 | **F4** | `RelationDrawn` stores `{ kind, meta }`; `relations_graph` stores kind (was derived) | `relation/events.ts`, `read/relationsGraph.ts`, `slice/api.ts` |
 | **F5** | `entity_catalog` carries the `definition` payload (fields/content) + `contextId` | `read/entityCatalog.ts` |
 | **F6** | `scenarios` read model indexed by anchorId **and** every referencedEntityId (auto-surface) | new read model |
 | **F7** | Derived markers: `FieldDef.derived?` + readModel `mode: projected\|live`; A3 validation skips derived fields + live read models (2026-06-10 self-model test; es-book ch 30/31/33) | `shared/fields.ts`, `readModel/events.ts`, catalog, `read/modelValidation.ts` |
+| **F8** | **Auto-RM** (2026-06-11): read models are never placed — auto-displayed left of the command wherever a trigger reads them (`displayedBy`/`monitoredBy`); straddle the boundary when fed from the slice immediately left; `PlaceEntity` rejects readModel (decider + 422); historic RM placements dropped at read time (slice GET + export); relate menus offer catalog RMs; new `GET /api/models/:id/relations` + catalog ships `definition` | `slice/slice.ts`, `slice/api.ts`, `relation/api.ts`, `model/api.ts`, `read/modelExport.ts`; frontend `boardView.js`, `SliceFrame.vue`, `ModelCanvas.vue`; amends wireframes W4 + F3 |
 
 **Decisions (G1/G3/O1/O2 RESOLVED in `em-automations-results.md`; O4/O5 RESOLVED by the user 2026-06-08):**
 

@@ -250,7 +250,7 @@ describe('autoReadModels', () => {
     expect(autoReadModels(boards, rels, rmCatalog).get('s2').cards[0].straddle).toBe(true)
   })
 
-  it('no straddle for same-slice or non-adjacent feeds — edges still emitted', () => {
+  it('same-slice and non-adjacent feeds: no straddle AND no edge (locality rule)', () => {
     const boards = [
       board('s1', [p('f1', 'businessFact', 'fact')]),
       board('s2', []),
@@ -259,9 +259,8 @@ describe('autoReadModels', () => {
     const rels = [displayed('e1', 'r1', 'w1'), feeds('e2', 'f1', 'r1'), feeds('e3', 'f2', 'r1')]
     const vm = autoReadModels(boards, rels, rmCatalog).get('s3')
     expect(vm.cards[0].straddle).toBe(false)
-    expect(vm.edges.map((e) => e.relationId).sort()).toEqual(['e1', 'e2', 'e3'])
-    expect(vm.edges.find((e) => e.relationId === 'e2').from.sliceId).toBe('s1')
-    expect(vm.edges.find((e) => e.relationId === 'e3').from.sliceId).toBe('s3')
+    // Only the same-slice display edge survives — distant/same-slice feeds undrawn.
+    expect(vm.edges.map((e) => e.relationId)).toEqual(['e1'])
   })
 
   it('first slice never straddles', () => {
@@ -288,7 +287,7 @@ describe('autoReadModels', () => {
     expect(vms.get('s2').cards.map((c) => c.entityId)).toEqual(['r1'])
   })
 
-  it('a feeder fact placed in two slices emits a feed edge from each', () => {
+  it('a feeder fact placed in two slices: only the immediate-left instance draws', () => {
     const boards = [
       board('s1', [p('f1', 'businessFact', 'fact')]),
       board('s2', [p('f1', 'businessFact', 'fact'), p('w1', 'wireframe', 'trigger')]),
@@ -296,7 +295,7 @@ describe('autoReadModels', () => {
     const rels = [displayed('e1', 'r1', 'w1'), feeds('e2', 'f1', 'r1')]
     const vm = autoReadModels(boards, rels, rmCatalog).get('s2')
     const feedEdges = vm.edges.filter((e) => e.relationId === 'e2')
-    expect(feedEdges.map((e) => e.from.sliceId).sort()).toEqual(['s1', 's2'])
+    expect(feedEdges.map((e) => e.from.sliceId)).toEqual(['s1']) // s2's own copy undrawn
     expect(vm.cards[0].straddle).toBe(true) // s1 is immediately left
   })
 })

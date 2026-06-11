@@ -416,7 +416,11 @@ scenarios
                                           THEN EntityPlaced{sl-record, bf-line, slotRole:fact, slot:0}
                                           WHEN PlaceEntity{sl-record, bf-logged, slot:1}
                                           THEN EntityPlaced{sl-record, bf-logged, slotRole:fact, slot:1}
-         note: facts/read-models/wireframes are MULTIPLE, slot-numbered (0=top)
+         note: facts/wireframes are MULTIPLE, slot-numbered (0=top)
+  rule   GIVEN SliceDefined(sl-record), DefineReadModel(rm-summary)
+                                          WHEN PlaceEntity{sl-record, rm-summary}
+                                          THEN reject (read models are AUTO-DISPLAYED from relations,
+                                               never placed — F8 auto-RM, 2026-06-11)
   rule   GIVEN SliceDefined(sl-record), DefineCommand(cmd-record), DefineCommand(cmd-other),
                EntityPlaced(cmd-record @ sl-record)
                                           WHEN PlaceEntity{sl-record, cmd-other}
@@ -485,11 +489,20 @@ scenarios
         DefineWireframe(wf-form), DefineCommand(cmd-record), DefineReadModel(rm-summary),
         BusinessFactDefined(bf-line), BusinessFactAssignedToContext(bf-line, ctx-budget),
         EntityPlaced(wf-form, trigger), EntityPlaced(cmd-record, command),
-        EntityPlaced(rm-summary, readModel slot 0), EntityPlaced(bf-line, fact slot 0),
-        RelationDrawn(rel-prod: cmd-record→bf-line, kind:produces)
-        THEN slice_canvas shows: trigger=[wf-form]; command=[cmd-record] + readModel=[rm-summary];
+        EntityPlaced(bf-line, fact slot 0),
+        RelationDrawn(rel-prod: cmd-record→bf-line, kind:produces),
+        RelationDrawn(rel-disp: rm-summary→wf-form, kind:displayedBy)
+        THEN slice_canvas shows: trigger=[wf-form]; command=[cmd-record];
              fact band lane "Budget"=[bf-line]; edges=[cmd-record→bf-line produces];
-             bf-line.lane = "Budget"  (DERIVED from entity_catalog.contextId — NOT stored on placement)
+             bf-line.lane = "Budget"  (DERIVED from entity_catalog.contextId — NOT stored on placement);
+             rm-summary AUTO-DISPLAYED left of the command (derived client-side from rel-disp via
+             GET /api/models/:id/relations — NOT a placement; F8 auto-RM 2026-06-11)
+  rule  GIVEN SliceDefined(sl-record), DefineReadModel(rm-summary)
+        WHEN PlaceEntity{sl-record, rm-summary}
+        THEN reject (read models are auto-displayed — decider + 422 pre-check; F8 auto-RM)
+  GIVEN … (historic) EntityPlaced(rm-summary, readModel slot 0)
+        THEN slice_canvas DROPS the readModel placement at read time (no migrations — F8; the card
+             still renders if a displayedBy/monitoredBy relation exists)
   GIVEN … above, then BusinessFactAssignedToContext(bf-line, ctx-audit)   (re-home, E1)
         THEN slice_canvas: bf-line now renders in lane "Audit" — WITHOUT any placement event
              (lane derived at render → re-home updates every slice for free)
@@ -498,6 +511,10 @@ scenarios
              render-time backstop) and the cmd-record→bf-line edge gone
   GIVEN SliceDefined(sl-record), DefineScenario(sc-1, GWT anchor cmd-record), EntityPlaced(cmd-record)
         THEN slice_canvas.scenarios includes sc-1 (auto-surfaced: cmd-record is present)
+  GIVEN SliceDefined(sl-record), EntityPlaced(wf-form, trigger),
+        RelationDrawn(rm-summary→wf-form, displayedBy), DefineScenario(sc-2, GT anchor rm-summary)
+        THEN slice_canvas.scenarios includes sc-2 — the auto-surface set unions in the RMs read
+             by the slice's triggers (they have no placement; F8 auto-RM 2026-06-11)
 ```
 
 ---

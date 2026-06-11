@@ -27,16 +27,18 @@ slice holds, never to *where* they sit.
   ┌──────────────────────────────────────────────────────────────┐
   │ TRIGGER slot   → wireframe | automation | translation          │  top graph
   │    │ issues ▼                       ▲ displayedBy (back-edge)   │
-  │  COMMAND band  → command  +  read model(s) stacked ▼            │  (cmd + RMs;
+  │  COMMAND band  → auto-RM(s) stacked ▼  +  command               │  (RMs left, cmd;
   │    │ produces ▼                     ▲ feeds (back-edge)         │   lane-agnostic)
   │  FACTS band    → business facts, divided into SWIMLANES         │
   ├──────────────────────────────────────────────────────────────┤
   │ TEXT strip     → notes + GWT/GT scenarios (as text)            │  bottom
   └──────────────────────────────────────────────────────────────┘
   Cycle: wireframe →issues→ command →produces→ fact →feeds→ readModel →displayedBy→ wireframe.
-  The read model rides the COMMAND band but wires UP to the trigger (it is the screen's
-  input); the command wires DOWN to facts. Command + read models are LANE-AGNOSTIC — only
-  the facts band is split into swimlanes (a command's tie to a stream is the arrow to its fact).
+  The read model rides the COMMAND band (LEFT of the command, AUTO-DISPLAYED from its
+  displayedBy/monitoredBy relations — never placed; F8 auto-RM 2026-06-11) and wires UP to the
+  trigger (it is the screen's input); the command wires DOWN to facts. Command + read models are
+  LANE-AGNOSTIC — only the facts band is split into swimlanes (a command's tie to a stream is the
+  arrow to its fact).
 ```
 
 ---
@@ -176,14 +178,15 @@ new wireframe needed. Fact wiring only:
 
 ## W4 — Slice Box: the SNAP-SLOT anatomy  *(v1 centerpiece — detailed)*
 
-**Empty** slice shows the slots so snapping is obvious (read models stack ▼ in the command band):
+**Empty** slice shows the slots so snapping is obvious. _[F8 auto-RM 2026-06-11: no read-model
+ghost — RMs are auto-displayed from relations, never placed]_:
 
 ```
 ┌── Slice: (unnamed) ─────────────────────── [rename][⋯] ──┐
 │  TRIGGER   « + wireframe / automation / translation »     │
 │     │ issues ▼                                            │
-│  COMMAND   « + command »    « + read model » (stack ▼,    │
-│     │ produces ▼              feed trigger ▲)             │
+│  COMMAND   « + command »   (read models appear here       │
+│     │ produces ▼            automatically when read ▲)    │
 │  FACTS                                                    │
 │     ┌ lane: (none) ─ « + business fact » ────────────────┐│
 │     └─────────────────────────────────────────────────── ┘│
@@ -192,14 +195,17 @@ new wireframe needed. Fact wiring only:
 └──────────────────────────────────────────────────────────┘
 ```
 
-**Filled** — full cycle, read model feeds trigger UP, command produces fact DOWN:
+**Filled** — full cycle, read model feeds trigger UP, command produces fact DOWN. The read model
+is AUTO-DISPLAYED at the slice's LEFT edge of the command band (it derives from the `displayedBy`
+relation; when fed from the slice immediately left it straddles the boundary — FIX 2026-06-11
+auto-RM in `em-commands-results.md`):
 
 ```
 ┌── Slice: Record Budget Line ─────────────── [rename][⋯] ──┐
-│  »[ Budget Entry Form ]«  (wireframe — TRIGGER)            │
-│      │ issues               ▲ displayedBy                  │
-│   [ Record Budget Line ]   [ Budget Summary ]°   ← COMMAND band (cmd + read model; lane-agnostic)
-│      │ produces              ▲ feeds                       │
+│        »[ Budget Entry Form ]«  (wireframe — TRIGGER)      │
+│  ▲ displayedBy    │ issues                                 │
+│ [ Budget Summary ]°   [ Record Budget Line ]   ← COMMAND band (auto-RM left, cmd right; lane-agnostic)
+│  ▲ feeds              │ produces                           │
 │   ── lane: Budget ── [ Budget Line Recorded ]° ───────────  ← FACTS band (swimlanes)
 │   ── lane: Audit ──────────────── [ Entry Logged ]°        
 ├──────────────────────────────────────────────────────────┤
@@ -209,24 +215,25 @@ new wireframe needed. Fact wiring only:
 │   THEN   Budget Line Recorded {amount: €5}                │
 └──────────────────────────────────────────────────────────┘
 legend: »…« focus · °data-from-system · staircase = time L→R
-slots: TRIGGER(wireframe|automation|translation) → COMMAND band(command + read models stacked ▼)
+slots: TRIGGER(wireframe|automation|translation) → COMMAND band(auto-RMs left + command)
        → FACTS band(swimlanes — facts only). Command + read models are LANE-AGNOSTIC.
 ```
 
-**Variant A — multiple read models stack** (`layout-and-rendering.md`: table + summary):
+**Variant A — multiple read models stack** (`layout-and-rendering.md`: table + summary; auto-RMs
+dedup per slice, stack in first-reader order):
 
 ```
-│   [ Record Budget Line ]   [ Budget Lines Table ]°   ← read model 1
-│                            [ Budget Summary ]°       ← read model 2 (stacked ▼; both feed trigger ▲)
+│ [ Budget Lines Table ]°   [ Record Budget Line ]   ← auto-RM 1
+│ [ Budget Summary ]°                                ← auto-RM 2 (stacked ▼; both feed trigger ▲)
 ```
 
 **Variant B — automation trigger** (the slot is role-bound, not wireframe-only; no UI):
 
 ```
 │  »⚙ Nightly Roll-Forward«  (automation — TRIGGER)         │
-│      │ reacts        ▲ monitoredBy                        │
-│   [ Prepare Next Year ]   [ Open Years ]°  ← command + read model the automation monitors
-│      │ produces                                           │
+│      ▲ monitoredBy   │ reacts                             │
+│   [ Open Years ]°   [ Prepare Next Year ]  ← auto-RM the automation monitors + command
+│                      │ produces                           │
 │   ── lane: Budget ── [ Budget Year Defined ]°             │
 ```
 
@@ -248,12 +255,13 @@ slots: TRIGGER(wireframe|automation|translation) → COMMAND band(command + read
   fact's lane changes only by re-assigning its Context); remove →
   **`RemoveEntityFromSlice`**; `[rename]` → `RenameSlice`; `[⋯]` → `ArchiveSlice`; draw arrow → **W7**.
 - **KEY FINDING #1 — placement shape must change.** Backend `EntityPlaced {x, y}` is freeform.
-  Snap slots mean placement = **`{ slotRole, slot }`** — `slotRole` (trigger|command|readModel|
-  fact) is **computed from the entity's type**, `slot` is an **integer vertical index** (0=top), and
+  Snap slots mean placement = **`{ slotRole, slot }`** — `slotRole` (trigger|command|fact) is
+  **computed from the entity's type**, `slot` is an **integer vertical index** (0=top), and
   the **lane is derived** from the fact's assigned Context (not stored on the placement → no drift).
-  Command/automation/translation are single (no slot); wireframes/read-models/facts are multiple
-  (slot-numbered). x/y becomes a derived layout-solver output, never user-authored. (Resolved as
-  **F3** in `em-commands-results.md`.)
+  Command/automation/translation are single (no slot); wireframes/facts are multiple
+  (slot-numbered). **Read models are NOT placeable** — auto-displayed from relations
+  (F8 auto-RM 2026-06-11 in `em-commands-results.md`). x/y becomes a derived layout-solver
+  output, never user-authored. (Resolved as **F3** in `em-commands-results.md`.)
 - **Within-lane arrangement** of multiple facts = a **vertical stack ordered by slot number**
   (resolved 2026-06-08, `layout-and-rendering.md`); reorder via slot swap. The one-fact-per-lane
   example below is illustrative, not a limit.

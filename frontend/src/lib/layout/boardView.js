@@ -117,8 +117,11 @@ export function buildBands(placements, laneRows) {
  * across readers, first-reader order). `straddle` = the RM is also fed
  * (`feeds` businessFact→RM / `directTranslation` externalBusinessFact→RM) by a
  * fact placed in the slice IMMEDIATELY LEFT of S → render half over the shared
- * boundary. Feed edges are emitted for EVERY slice the feeder is placed in
- * (cross-slice arrows); display edges stay within S.
+ * boundary. ARROWS ARE LOCAL by design: each RM card draws only its same-slice
+ * displayedBy/monitoredBy edges and the feed edges from the IMMEDIATE-LEFT
+ * slice — every other feed/read of a shared RM stays undrawn (a shared RM like
+ * an entity catalog would otherwise flood the canvas; network exploration is a
+ * future, separate mechanism).
  * @param {object[]} boards slice DTOs in display order
  * @param {Array<{_id: string, fromId: string, toId: string, kind: string}>} modelRelations
  * @param {Array<{_id: string, entityType: string, name: string, definition?: object}>} catalog
@@ -198,13 +201,16 @@ export function autoReadModels(boards, modelRelations, catalog) {
     for (const [rmId, rmCard] of cardsByRm) {
       for (const r of feedsByRm.get(rmId) ?? []) {
         for (const feederSliceId of factSlices.get(r.fromId) ?? []) {
+          // Only the immediate-left slice's feeds are drawn (and trigger the
+          // straddle); all other feeds of this RM stay undrawn — locality rule.
+          if (feederSliceId !== prevSliceId) continue
           pushEdge(
             r._id,
             r.kind,
             { sliceId: feederSliceId, entityId: r.fromId },
             { sliceId: board._id, entityId: rmId },
           )
-          if (feederSliceId === prevSliceId) rmCard.straddle = true
+          rmCard.straddle = true
         }
       }
     }
