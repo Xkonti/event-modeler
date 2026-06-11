@@ -117,6 +117,30 @@ describe('modeling vertical (slices, snap-slots, relations, cascade)', () => {
     await stopAuthHarness();
   });
 
+  it('rejects placing a read model (auto-displayed from relations)', async () => {
+    const modelId = uuid();
+    const sliceId = uuid();
+    const rmId = uuid();
+    const t = tag();
+
+    assert.equal((await defineSlice(modelId, sliceId, 'NoRM')).status, 200);
+    assert.equal(
+      (
+        await postJson('/api/read-models', {
+          modelId,
+          entityId: rmId,
+          name: `Catalog-${t}`,
+          fields: [],
+        })
+      ).status,
+      200,
+    );
+    await awaitCataloged('/api/read-models', rmId);
+    await pollSlice(sliceId, (v) => v._id === sliceId);
+
+    assert.equal((await place(sliceId, rmId)).status, 422);
+  });
+
   it('places entities into computed bands with appended slots (F3)', async () => {
     const modelId = uuid();
     const sliceId = uuid();

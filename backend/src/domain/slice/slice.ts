@@ -96,6 +96,12 @@ export const decide = (command: SliceCommand, state: Slice): SliceEvent => {
       const slotRole = slotRoleFor(entityType);
       if (!slotRole)
         throw new IllegalStateError(`Entity type '${entityType}' is not placeable`);
+      // Read models are derived: the canvas displays them automatically from
+      // displayedBy/monitoredBy relations — never via manual placement.
+      if (slotRole === 'readModel')
+        throw new IllegalStateError(
+          'Read models are displayed automatically and cannot be placed',
+        );
       if (state.placements.some((p) => p.placedEntityId === placedEntityId))
         throw new IllegalStateError('Entity already placed on this slice');
       if (

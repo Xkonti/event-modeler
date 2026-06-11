@@ -200,6 +200,29 @@ export const relationApi =
       },
     );
 
+    // Model-scoped edge list — the frontend derives auto-displayed read models
+    // (and their arrows, incl. cross-slice feeds) from the full graph. OPEN in
+    // v1, same as the slice GET.
+    router.get(
+      '/models/:id/relations',
+      async (req: Request, res: Response): Promise<void> => {
+        const edges = await documents
+          .collection<RelationEdgeDoc>('relations_graph')
+          .find({ modelId: req.params.id });
+        res
+          .status(200)
+          .json(
+            edges.map(({ _id, fromId, toId, kind, meta }) => ({
+              _id,
+              fromId,
+              toId,
+              kind,
+              meta,
+            })),
+          );
+      },
+    );
+
     router.get('/relations/:id', async (req: Request, res: Response): Promise<void> => {
       const doc = await documents
         .collection<RelationEdgeDoc>('relations_graph')

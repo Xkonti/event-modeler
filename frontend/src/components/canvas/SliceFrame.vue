@@ -18,6 +18,10 @@ const props = defineProps({
   lanesOn: { type: Boolean, default: false },
   fieldsOn: { type: Boolean, default: true },
   chapters: { type: Array, default: () => [] }, // [{_id, name}] creation order (C1 band)
+  // Auto-displayed read models for THIS slice (autoReadModels output entry).
+  autoRm: { type: Object, default: () => ({ cards: [], edges: [] }) },
+  catalog: { type: Array, default: () => [] }, // model catalog (RM relate options + strip names)
+  modelRelations: { type: Array, default: () => [] }, // model-level relations (RM-pair exclusion)
   selectedEntityId: { type: String, default: null },
   inFlightSwaps: { type: Set, default: () => new Set() },
 })
@@ -37,9 +41,16 @@ const emit = defineEmits([
 
 const bands = computed(() => buildBands(props.board.placements ?? [], props.laneRows))
 const relOptions = computed(() =>
-  relationOptions(props.board.placements ?? [], props.board.relations ?? []),
+  relationOptions(
+    props.board.placements ?? [],
+    props.board.relations ?? [],
+    props.modelRelations,
+    props.catalog,
+  ),
 )
-const strip = computed(() => buildStripModel(props.board.scenarios, props.board.placements))
+const strip = computed(() =>
+  buildStripModel(props.board.scenarios, props.board.placements, props.catalog),
+)
 
 const cardProps = (card) => ({
   card,
@@ -139,8 +150,33 @@ function onArchive() {
       <GhostSlot v-if="bands.trigger.ghost" :ghost="bands.trigger.ghost" @add="(role) => emit('add-entity', role)" />
     </div>
 
-    <!-- command row: command + read-model column to its right (staircase step 1) -->
-    <div class="flex items-start gap-10 border-b border-gray-200 py-3 pl-16 pr-4">
+    <!-- command row (staircase step 1): auto-displayed read models hug the LEFT
+         edge (straddling the boundary when fed by the previous slice), the
+         command sits to their right. Read models are never placed — they derive
+         from displayedBy/monitoredBy relations (autoReadModels). -->
+    <div
+      class="flex items-start gap-10 border-b border-gray-200 py-3 pr-4"
+      :class="autoRm.cards.length ? 'pl-3' : 'pl-16'"
+    >
+      <div
+        v-if="autoRm.cards.length"
+        :data-testid="`auto-rm-${board._id}`"
+        class="flex flex-col gap-3"
+      >
+        <div
+          v-for="card in autoRm.cards"
+          :key="card.entityId"
+          :class="card.straddle ? 'relative z-10 -translate-x-1/2' : ''"
+        >
+          <EntityCard
+            :card="card"
+            :slice-id="board._id"
+            :selected="selectedEntityId === card.entityId"
+            :fields-on="fieldsOn"
+            @select="emit('select-entity', card.entityId)"
+          />
+        </div>
+      </div>
       <div class="flex flex-col gap-3">
         <EntityCard
           v-if="bands.command.card"
@@ -149,17 +185,6 @@ function onArchive() {
           @relate="(draft) => emit('relate', draft)"
         />
         <GhostSlot v-if="bands.command.ghost" :ghost="bands.command.ghost" @add="(role) => emit('add-entity', role)" />
-      </div>
-      <div class="flex flex-col gap-3">
-        <EntityCard
-          v-for="card in bands.readModels.cards"
-          :key="card.entityId"
-          v-bind="cardProps(card)"
-          @select="emit('select-entity', card.entityId)"
-          @swap="(otherId) => emit('swap', { entityIdA: card.entityId, entityIdB: otherId })"
-          @relate="(draft) => emit('relate', draft)"
-        />
-        <GhostSlot :ghost="bands.readModels.ghost" @add="(role) => emit('add-entity', role)" />
       </div>
     </div>
 

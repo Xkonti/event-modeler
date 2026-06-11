@@ -561,7 +561,9 @@ const main = async () => {
     const r = await reqRetry('POST', '/slices', { modelId, sliceId, name: s.name }, `slice ${s.name}`);
     if (!(r?.status < 400)) continue;
     sliceIds[s.name] = sliceId;
-    const order = [...(s.w ?? []), ...(s.a ?? []), ...(s.c ? [s.c] : []), ...(s.r ?? []), ...(s.fx ?? [])];
+    // s.r (read models) are NOT placed — the canvas auto-displays them from
+    // displayedBy/monitoredBy relations (drawn below).
+    const order = [...(s.w ?? []), ...(s.a ?? []), ...(s.c ? [s.c] : []), ...(s.fx ?? [])];
     for (const ent of order) {
       if (!ids[ent]) { failures.push(`placement ${s.name}/${ent}: no entity id`); continue; }
       await reqRetry('POST', `/slices/${sliceId}/placements`, { placedEntityId: ids[ent] }, `place ${ent} on ${s.name}`);

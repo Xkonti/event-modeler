@@ -151,6 +151,15 @@ describe('slice decider', () => {
       .thenThrows();
   });
 
+  it('rejects placing a read model (auto-displayed from relations)', () => {
+    given([defined])
+      .when({
+        type: 'PlaceEntity',
+        data: { sliceId: 's1', placedEntityId: 'r1', entityType: 'readModel' },
+      })
+      .thenThrows();
+  });
+
   it('swaps slots of two facts in the same band', () => {
     given([
       defined,

@@ -14,7 +14,7 @@ import { useSlice } from '@/repositories/sliceRepository'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
-  role: { type: String, default: null }, // trigger | command | readModel | fact
+  role: { type: String, default: null }, // trigger | command | fact (read models are auto-displayed)
   sliceId: { type: String, default: null },
   catalog: { type: Array, default: () => [] },
 })

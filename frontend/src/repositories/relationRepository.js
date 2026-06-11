@@ -4,13 +4,16 @@
 // 11-pair allow-list (422 invalid pair/kind, 409 duplicate (from,to,kind)).
 //
 // Backend paths (build-to contract):
-//   POST   /api/relations        { modelId, relationId, fromId, toId, kind, meta? }
-//   PUT    /api/relations/:id    { kind?, meta? }
+//   POST   /api/relations             { modelId, relationId, fromId, toId, kind, meta? }
+//   PUT    /api/relations/:id         { kind?, meta? }
 //   DELETE /api/relations/:id
-//   GET    /api/relations/:id    → { _id, modelId, fromId, toId, kind, meta? }
+//   GET    /api/relations/:id         → { _id, modelId, fromId, toId, kind, meta? }
+//   GET    /api/models/:id/relations  → [{ _id, fromId, toId, kind, meta? }]
 //
-// Edges embed in every slice GET → board convergence rides the ['slices']
-// prefix invalidation, spaced for projection lag.
+// Same-slice edges embed in every slice GET → board convergence rides the
+// ['slices'] prefix invalidation. The model-level list feeds the auto-displayed
+// read models (cards + cross-slice arrows) → every mutation also spaced-
+// invalidates the ['relations'] prefix.
 import { useQuery, useMutation, useQueryCache } from '@pinia/colada'
 import { http } from '@/lib/http'
 import { retry404, spacedInvalidate } from '@/lib/projectionLag'
@@ -20,6 +23,20 @@ export const RELATION_KEYS = {
   root: ['relations'],
   /** @param {string} id */
   byId: (id) => ['relations', id],
+  /** @param {string} modelId */
+  byModel: (modelId) => ['relations', 'byModel', modelId],
+}
+
+/**
+ * All relations of a model — the auto-read-model display derives cards and
+ * arrows (incl. cross-slice feeds) from this graph.
+ * @param {() => string} getModelId reactive model-id getter
+ */
+export function useModelRelations(getModelId) {
+  return useQuery({
+    key: () => RELATION_KEYS.byModel(getModelId()),
+    query: () => http.get(`/api/models/${getModelId()}/relations`),
+  })
 }
 
 /**
@@ -38,6 +55,8 @@ async function settle(cache, relationId) {
   if (relationId)
     await cache.invalidateQueries({ key: RELATION_KEYS.byId(relationId), exact: true })
   void spacedInvalidate(cache, SLICE_KEYS.root).catch(() => {})
+  // Refresh the model-level graph too (auto-RM cards/arrows).
+  void spacedInvalidate(cache, RELATION_KEYS.root).catch(() => {})
 }
 
 export function useDrawRelation() {

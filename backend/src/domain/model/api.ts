@@ -117,12 +117,15 @@ export const modelApi =
         const dto = entries
           .filter((e) => e.entityType !== 'slice')
           .sort(byDefinedAt)
-          .map(({ _id, entityType, name, contextId, definedAtPosition }) => ({
+          .map(({ _id, entityType, name, contextId, definedAtPosition, definition }) => ({
             _id,
             entityType,
             name,
             contextId,
             definedAtPosition,
+            // Auto-displayed read models render straight from the catalog (no
+            // placement to carry fields), so the catalog DTO ships `definition`.
+            definition,
           }));
         res.status(200).json(dto);
       },

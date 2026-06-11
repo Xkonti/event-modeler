@@ -22,6 +22,7 @@ import { CATALOG_KEYS } from '@/repositories/catalogRepository'
 import { SLICE_KEYS } from '@/repositories/sliceRepository'
 import { CONTEXT_KEYS } from '@/repositories/contextRepository'
 import { SCENARIO_KEYS } from '@/repositories/scenarioRepository'
+import { RELATION_KEYS } from '@/repositories/relationRepository'
 
 /**
  * @param {object} cfg
@@ -57,6 +58,9 @@ export function createEntityRepo({ resource, keyRoot, payload, hasLane = false }
     // Catalog writes can flip scenarios' derived outOfSync (e.g. archiving a
     // referenced fact) — converge those reads too (prefix: byId + byModel).
     void spacedInvalidate(cache, SCENARIO_KEYS.root).catch(() => {})
+    // Archiving cascades relation removal server-side (A1) — refresh the
+    // model-level graph so auto-RM cards/arrows disappear.
+    void spacedInvalidate(cache, RELATION_KEYS.root).catch(() => {})
   }
 
   /**

@@ -243,6 +243,7 @@ async function onExport() {
       <PaletteSidebar :catalog="catalog ?? []" />
 
       <ModelCanvas
+        :model-id="modelId"
         :slice-ids="sliceIds"
         :lanes-on="workspace.lanesVisible"
         :fields-on="workspace.fieldsVisible"

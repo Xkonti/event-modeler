@@ -4,8 +4,10 @@
 //
 // Backend path (build-to contract):
 //   GET /api/models/:id/entities
-//     → [{ _id, entityType, name, contextId?, definedAtPosition? }]
+//     → [{ _id, entityType, name, contextId?, definedAtPosition?, definition? }]
 //       creation order, archived excluded, slices excluded (server-side).
+//       `definition` ships so auto-displayed read models can render fields
+//       straight from the catalog (they have no placement to carry them).
 import { useQuery } from '@pinia/colada'
 import { http } from '@/lib/http'
 

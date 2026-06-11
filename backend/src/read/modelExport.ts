@@ -136,11 +136,15 @@ export const assembleExport = (input: {
         id: s._id,
         ...(s.name !== undefined ? { name: s.name } : {}),
         ...(s.chapterId !== undefined ? { chapterId: s.chapterId } : {}),
-        placements: s.placements.map(({ placedEntityId, slotRole, slot }) => ({
-          entityId: placedEntityId,
-          slotRole,
-          ...(slot !== undefined ? { slot } : {}),
-        })),
+        placements: s.placements
+          // Read models are auto-displayed from relations — historic readModel
+          // placements are dropped here too, matching the slice GET.
+          .filter(({ slotRole }) => slotRole !== 'readModel')
+          .map(({ placedEntityId, slotRole, slot }) => ({
+            entityId: placedEntityId,
+            slotRole,
+            ...(slot !== undefined ? { slot } : {}),
+          })),
       })),
     relations: relations
       .slice()

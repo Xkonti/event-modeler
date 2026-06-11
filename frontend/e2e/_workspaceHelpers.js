@@ -58,16 +58,19 @@ export async function createEntity(page, entityType, name) {
  * @returns {Promise<string>} the sliceId (from the box testid)
  */
 export async function addSlice(page) {
+  const boxes = page.locator('[data-testid^="slice-box-"]')
+  const before = await boxes.count()
   await page.getByTestId('add-slice').click()
-  const box = page.locator('[data-testid^="slice-box-"]').last()
-  await expect(box).toBeVisible({ timeout: 15_000 })
-  const testid = await box.getAttribute('data-testid')
+  // Wait for the NEW box (count grows) — `.last()` alone races the projection
+  // lag and can return an already-rendered earlier slice.
+  await expect(boxes).toHaveCount(before + 1, { timeout: 15_000 })
+  const testid = await boxes.last().getAttribute('data-testid')
   return testid.replace('slice-box-', '')
 }
 
 /**
  * Place an existing catalog entity into a slice's role ghost via the dialog.
- * @param {string} role trigger | command | readModel | fact
+ * @param {string} role trigger | command | fact (read models are auto-displayed)
  * @param {string} pickTestId `place-pick-<entityId>` — or use pickByName below
  */
 export async function placeViaGhost(page, sliceId, role, entityName) {

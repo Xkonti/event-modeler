@@ -90,6 +90,13 @@ export const sliceApi =
           res.status(422).json({ ok: false, error: 'placed entity not found' });
           return;
         }
+        if (entry.entityType === 'readModel') {
+          res.status(422).json({
+            ok: false,
+            error: 'read models are displayed automatically from relations',
+          });
+          return;
+        }
         if (!slice || slice.archived) {
           res.status(422).json({ ok: false, error: 'slice not found' });
           return;
@@ -222,13 +229,15 @@ export const sliceApi =
         const BAND_ORDER: Record<string, number> = {
           trigger: 0,
           command: 1,
-          readModel: 2,
-          fact: 3,
+          fact: 2,
         };
         const placements = slice.placements
           .flatMap((p: SlicePlacement) => {
             const entry = byId.get(p.placedEntityId);
             if (!entry || entry.archived) return [];
+            // Read models are auto-displayed from relations now; historic
+            // readModel placements are dropped at read time (no migrations).
+            if (entry.entityType === 'readModel') return [];
             return [
               {
                 entityId: p.placedEntityId,
@@ -262,12 +271,31 @@ export const sliceApi =
           return [{ _id: e._id, fromId: e.fromId, toId: e.toId, kind: e.kind, meta: e.meta }];
         });
 
+        // Read models leave `visibleIds` (no placements), but the canvas still
+        // auto-displays them next to their readers — so RM-anchored scenarios
+        // must keep surfacing. Union in the RMs read by this slice's triggers.
+        const triggerIds = placements
+          .filter(
+            (p) =>
+              p.slotRole === 'trigger' &&
+              (p.entityType === 'wireframe' || p.entityType === 'automation'),
+          )
+          .map((p) => p.entityId);
+        const displayEdges = triggerIds.length
+          ? await documents
+              .collection<RelationEdgeDoc>('relations_graph')
+              .find({
+                toId: { $in: triggerIds },
+                kind: { $in: ['displayedBy', 'monitoredBy'] },
+              })
+          : [];
+
         // Scenarios referencing any visible entity auto-surface on the canvas
         // (F6). Filtered in JS over the model's scenarios — model-sized, v1-fine.
         const modelScenarios = await documents
           .collection<ScenarioDoc>('scenarios')
           .find({ modelId: slice.modelId, archived: false });
-        const visible = new Set(visibleIds);
+        const visible = new Set([...visibleIds, ...displayEdges.map((e) => e.fromId)]);
         const scenarios = modelScenarios
           .filter((s) => s.referencedEntityIds.some((id) => visible.has(id)))
           .map(({ _id, kind, anchorId, given, when, then, referencedEntityIds }) => ({

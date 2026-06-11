@@ -18,12 +18,15 @@
 // Workspace.vue, the single cross-domain intent→repo hub.
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import SliceFrame from '@/components/canvas/SliceFrame.vue'
-import { laneRowsFor } from '@/lib/layout/boardView'
+import { laneRowsFor, autoReadModels } from '@/lib/layout/boardView'
 import { useSliceBoards, useSwapSlots, useRemovePlacement } from '@/repositories/sliceRepository'
+import { useModelRelations } from '@/repositories/relationRepository'
+import { useCatalog } from '@/repositories/catalogRepository'
 import { useUiStore } from '@/stores/ui'
 import { HttpError } from '@/lib/http'
 
 const props = defineProps({
+  modelId: { type: String, required: true },
   sliceIds: { type: Array, required: true }, // creation order (W3 tiling)
   lanesOn: { type: Boolean, default: false },
   fieldsOn: { type: Boolean, default: true },
@@ -56,6 +59,15 @@ const removePlacement = useRemovePlacement()
 
 const boardList = computed(() => boards.value ?? [])
 const laneRows = computed(() => laneRowsFor(boardList.value, props.lanesOn))
+
+// Auto-displayed read models — derived from the model-level relation graph +
+// catalog (RMs are never placed). Cache-shared with Workspace's useCatalog.
+const { data: modelRelations } = useModelRelations(() => props.modelId)
+const { data: catalog } = useCatalog(() => props.modelId)
+const autoRmBySlice = computed(() =>
+  autoReadModels(boardList.value, modelRelations.value ?? [], catalog.value ?? []),
+)
+const EMPTY_AUTO_RM = { cards: [], edges: [] }
 
 // Shared row template: [chapter band] [header] [trigger] [command] [lane × N] [strip].
 const gridRows = computed(
@@ -110,11 +122,46 @@ function measureEdges() {
       })
     }
   }
+  // Auto-read-model edges (display + feeds, possibly cross-slice) come as
+  // explicit descriptors — both endpoints resolved to a concrete slice's card.
+  // Mostly-horizontal pairs anchor on left/right edges instead of top/bottom.
+  for (const [, vm] of autoRmBySlice.value) {
+    for (const e of vm.edges) {
+      const fromEl = host.querySelector(`[data-card="${e.from.sliceId}:${e.from.entityId}"]`)
+      const toEl = host.querySelector(`[data-card="${e.to.sliceId}:${e.to.entityId}"]`)
+      if (!fromEl || !toEl) continue
+      const a = fromEl.getBoundingClientRect()
+      const b = toEl.getBoundingClientRect()
+      const dx = b.left + b.width / 2 - (a.left + a.width / 2)
+      const dy = b.top + b.height / 2 - (a.top + a.height / 2)
+      const horizontal = Math.abs(dx) > Math.abs(dy)
+      const seg = horizontal
+        ? {
+            x1: (dx >= 0 ? a.right : a.left) - hostRect.left,
+            y1: a.top + a.height / 2 - hostRect.top,
+            x2: (dx >= 0 ? b.left : b.right) - hostRect.left,
+            y2: b.top + b.height / 2 - hostRect.top,
+          }
+        : {
+            x1: a.left + a.width / 2 - hostRect.left,
+            y1: (dy >= 0 ? a.bottom : a.top) - hostRect.top,
+            x2: b.left + b.width / 2 - hostRect.left,
+            y2: (dy >= 0 ? b.top : b.bottom) - hostRect.top,
+          }
+      segments.push({
+        id: `${e.relationId}@${e.from.sliceId}->${e.to.sliceId}`,
+        relationId: e.relationId,
+        sliceId: e.to.sliceId,
+        kind: e.kind,
+        ...seg,
+      })
+    }
+  }
   edgeSegments.value = segments
 }
 
 watch(
-  [boardList, () => props.lanesOn, () => props.fieldsOn],
+  [boardList, autoRmBySlice, () => props.lanesOn, () => props.fieldsOn],
   () => nextTick(measureEdges),
   { immediate: true },
 )
@@ -168,6 +215,9 @@ function onKeydown(e) {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
   const lp = lastPlacement.value
   if (!lp || props.selectedEntityId !== lp.entityId) return
+  // Auto-displayed read models have no placement to remove — ignore Delete.
+  const board = boardList.value.find((b) => b._id === lp.sliceId)
+  if (!board?.placements?.some((p) => p.entityId === lp.entityId)) return
   lastPlacement.value = null
   emit('clear-selection')
   removePlacement
@@ -243,6 +293,9 @@ onBeforeUnmount(() => {
           :lanes-on="lanesOn"
           :fields-on="fieldsOn"
           :chapters="chapters"
+          :auto-rm="autoRmBySlice.get(board._id) ?? EMPTY_AUTO_RM"
+          :catalog="catalog ?? []"
+          :model-relations="modelRelations ?? []"
           :selected-entity-id="selectedEntityId"
           :in-flight-swaps="inFlightSwaps"
           @select-entity="(id) => onSelectEntity(id, board._id)"
