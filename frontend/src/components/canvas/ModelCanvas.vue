@@ -215,7 +215,7 @@ onBeforeUnmount(() => {
     <div class="h-full w-full overflow-auto" @click="onBackgroundClick">
       <div
         ref="gridEl"
-        class="relative grid w-max items-stretch gap-x-16 p-8 pt-16"
+        class="relative grid w-max items-stretch gap-x-0 p-8 pt-16"
         :style="{ gridAutoFlow: 'column', gridAutoColumns: 'max-content', gridTemplateRows: gridRows }"
       >
         <!-- lane-label gutter column (lanes layer on) -->

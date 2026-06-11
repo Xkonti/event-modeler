@@ -78,13 +78,13 @@ function onArchive() {
 <template>
   <div
     :data-testid="`slice-box-${board._id}`"
-    class="grid min-w-[480px] grid-rows-[subgrid] rounded-lg border border-gray-300 bg-white shadow-sm"
+    class="grid min-w-[480px] grid-rows-[subgrid] border-r border-gray-300 bg-white first:border-l"
     style="grid-row: 1 / -1"
   >
     <!-- chapter band row (C1) — the shared organizing band above the headers -->
     <div
       :data-testid="`chapter-band-${board._id}`"
-      class="flex min-h-7 items-center rounded-t-lg border-b border-amber-200/70 bg-amber-50/70 px-3"
+      class="flex min-h-7 items-center border-b border-amber-200/70 bg-amber-50/70 px-3"
       @click.stop
     >
       <select
@@ -101,12 +101,12 @@ function onArchive() {
     </div>
 
     <!-- header row -->
-    <div class="flex min-h-9 items-center justify-between border-b border-gray-200 bg-gray-50 px-3">
+    <div class="flex min-h-9 items-center gap-1 border-b border-gray-200 bg-gray-50 px-3">
       <!-- testid deliberately NOT slice-box-* — e2e selects boxes by that prefix. -->
       <span data-testid="slice-name" class="truncate text-sm font-semibold text-gray-800">
         {{ board.name || '(unnamed slice)' }}
       </span>
-      <span class="flex items-center gap-1">
+      <span class="flex shrink-0 items-center gap-1">
         <button
           :data-testid="`slice-rename-${board._id}`"
           class="rounded px-1.5 text-xs text-gray-400 hover:bg-gray-200 hover:text-gray-700"
@@ -127,7 +127,7 @@ function onArchive() {
     </div>
 
     <!-- trigger row -->
-    <div class="flex flex-col gap-3 px-4 py-3">
+    <div class="flex flex-col gap-3 border-b border-gray-200 px-4 py-3">
       <EntityCard
         v-for="card in bands.trigger.cards"
         :key="card.entityId"
@@ -140,7 +140,7 @@ function onArchive() {
     </div>
 
     <!-- command row: command + read-model column to its right (staircase step 1) -->
-    <div class="flex items-start gap-10 py-3 pl-16 pr-4">
+    <div class="flex items-start gap-10 border-b border-gray-200 py-3 pl-16 pr-4">
       <div class="flex flex-col gap-3">
         <EntityCard
           v-if="bands.command.card"
@@ -168,7 +168,7 @@ function onArchive() {
       v-for="(lane, i) in bands.factLanes"
       :key="lane.laneId ?? 'none'"
       class="flex flex-col gap-3 py-3 pl-28 pr-4"
-      :class="lanesOn && i > 0 ? 'border-t border-dashed border-gray-200' : ''"
+      :class="lanesOn && i > 0 ? 'border-t border-gray-200' : ''"
     >
       <EntityCard
         v-for="card in lane.cards"

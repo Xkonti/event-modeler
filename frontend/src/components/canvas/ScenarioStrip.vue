@@ -40,7 +40,7 @@ function clauseText(s) {
 <template>
   <div
     :data-testid="`scenario-strip-${sliceId}`"
-    class="rounded-b-lg border-t border-gray-200 bg-gray-50/80 px-3 py-2 text-[11px] leading-5 text-gray-700"
+    class="border-t border-gray-200 bg-gray-50/80 px-3 py-2 text-[11px] leading-5 text-gray-700"
   >
     <div v-for="row in rows" :key="row.scenario._id">
       <button
